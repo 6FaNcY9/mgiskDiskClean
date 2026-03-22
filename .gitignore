@@ -1,0 +1,10 @@
+# generated files — never commit these
+reports/
+logs/
+nginx/.htpasswd
+nginx/nginx.pid
+
+# devenv
+.devenv/
+.devenv.flake.nix
+devenv.lock
