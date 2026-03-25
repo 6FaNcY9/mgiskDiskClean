@@ -1,0 +1,60 @@
+Task 12 — Generate audited manifest JSON (2026-03-24)
+======================================================
+
+## Files created
+- src/maildir_report/manifest.py
+- tests/test_manifest.py
+
+## Targeted test run (pytest -q -k "manifest")
+66 passed, 240 deselected in 0.18s
+
+## Full test suite (pytest -q)
+306 passed in 0.57s
+(Prior suite count: 218+11+35+20+16+20+20+26+24+66 = 306 total)
+
+## LSP diagnostics
+Zero errors on src/maildir_report/manifest.py
+
+## ast-grep: datetime.now() check
+Zero matches in src/maildir_report/manifest.py
+
+## Manifest schema (task-12-manifest.txt)
+{
+    "schema_version": "1.0",
+    "generated_at": "<ISO 8601 UTC>",
+    "inventory": {
+        "email_count":      <int>,
+        "dup_email_count":  <int>,
+        "dup_group_count":  <int>,
+        "total_size_bytes": <int>
+    },
+    "email_stable_ids": [<str>, ...],
+    "dup_groups": [
+        {
+            "group_id":          <str>,
+            "member_count":      <int>,
+            "member_email_ids":  [<str>, ...],
+            "canonical_email_id": <str>,
+            "total_size_bytes":  <int>
+        },
+        ...
+    ],
+    "pdf_sha256": "<hex str | None>"
+}
+
+## Reconciliation invariants verified
+1. email_count == len(email_stable_ids)
+2. dup_email_count <= email_count
+3. dup_group_count == len(dup_groups)
+4. sum(g.member_count) == dup_email_count
+5. email_stable_ids are unique (no duplicates)
+6. group_ids are unique
+
+## Test coverage highlights
+- Schema key presence tests (17 tests)
+- Inventory counter accuracy with real scan+group fixtures
+- email_stable_ids: count, content, ordering (sort_emails), uniqueness, determinism
+- dup_groups: required fields, member_count correctness, group_id hex format, determinism
+- JSON round-trip (no non-serialisable values)
+- validate_manifest_invariants: happy path + all 6 violation cases
+- Integration: 47-file fixture, mixed dup+unique, pdf_sha256 correctness

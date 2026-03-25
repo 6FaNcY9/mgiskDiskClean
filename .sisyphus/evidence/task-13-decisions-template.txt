@@ -1,0 +1,14 @@
+
+
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collected 346 items / 306 deselected / 40 selected
+
+tests/test_decisions_template.py ....................................... [ 97%]
+.                                                                        [100%]
+
+====================== 40 passed, 306 deselected in 0.09s ======================

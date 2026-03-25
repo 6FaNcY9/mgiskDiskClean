@@ -1,0 +1,32 @@
+
+  mgiskDiskClean devenv
+  ──────────────────────────────────────────────────────
+  scan-mailbox <mailbox>   rsync maildir locally, scan, deploy
+  scan-upload              upload legacy scripts to server
+  pull-report <maildir>    pull mail_report.html from server
+  pull-disk-report         pull disk_report.html from server
+  deploy-report <file>     deploy local html to reports/
+  set-password             set/reset boss nginx login password
+  serve-start              start nginx on :8765
+  serve-stop               stop nginx
+  serve-reload             reload nginx (no downtime)
+  ──────────────────────────────────────────────────────
+  reports : /home/vino/Documents/Projekts/mrijaPageClean/reports/
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collected 172 items / 137 deselected / 35 selected
+
+tests/test_walk_deterministic.py ...................................     [100%]
+
+====================== 35 passed, 137 deselected in 0.07s ======================
+--- FULL SUITE ---
+
+........................................................................ [ 41%]
+........................................................................ [ 83%]
+............................                                             [100%]
+172 passed in 0.22s

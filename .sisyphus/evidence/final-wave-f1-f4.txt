@@ -1,0 +1,46 @@
+=== FINAL VERIFICATION WAVE F1–F4 ===
+Date: 2026-03-25
+
+--- F1: DETERMINISM + AUDIT VERIFICATION ---
+PASS: test_pdf_determinism.py — 20/20 passed
+PASS: test_e2e_cli.py (determinism+manifest) — 12/12 passed
+Key tests:
+  TestE2eDeterminism::test_e2e_two_runs_produce_identical_pdf_sha256  PASSED
+  TestE2eDeterminism::test_e2e_two_runs_produce_identical_manifest    PASSED
+  TestE2eManifestConsistency::test_e2e_manifest_pdf_sha256_matches_actual_pdf  PASSED
+  TestPdfByteDeterminism::test_two_runs_same_sha256  PASSED
+  TestPdfByteDeterminism::test_many_runs_all_same_sha256  PASSED
+RESULT: ✅ PDF SHA-256 is byte-for-byte reproducible with fixed timestamp
+
+--- F2: DUPLICATE CORRECTNESS VERIFICATION ---
+PASS: test_pdf_duplicates.py + test_dedup_group.py — 42/42 passed
+Key tests:
+  TestTransitiveGrouping::test_dedup_group_transitive_one_group  PASSED
+  TestTransitiveGrouping::test_dedup_group_transitive_all_emails_in_group  PASSED
+  TestEdgeCases::test_records_and_groups_consistent  PASSED
+  test_e2e_duplicate_emails_show_dup_group_in_manifest  PASSED
+RESULT: ✅ Duplicate groups exhaustive, PDF section members match manifest
+
+--- F3: GERMAN READABILITY VERIFICATION ---
+PASS: test_pdf_german_headers.py — 26/26 passed
+Key tests:
+  TestGermanSectionHeaders::test_zusammenfassung_present  PASSED
+  TestGermanSectionHeaders::test_betreff_column_present   PASSED
+  TestGermanSectionHeaders::test_anhaenge_column_present  PASSED (Anhänge)
+  TestGermanSectionHeaders::test_duplikate_column_present PASSED
+  TestUmlautRendering::test_umlaut_in_subject_appears_in_pdf  PASSED
+  TestUmlautRendering::test_umlaut_column_header_anhaenge     PASSED
+  TestUmlautRendering::test_all_german_special_chars_font_support  PASSED
+RESULT: ✅ German headings render correctly, umlauts not garbled
+
+--- F4: SERVING STRIPPED VERIFICATION ---
+nginx/ dir:       NOT FOUND (ls: cannot access 'nginx/')
+cloudflared/ dir: NOT FOUND (ls: cannot access 'cloudflared/')
+grep serve-start/serve-stop/serve-reload/tunnel-start in user files: 0 matches
+grep nginx/cloudflared in *.md/*.nix/*.py/*.sh (excl .devenv/.git/.sisyphus): 0 matches
+RESULT: ✅ No serving/tunnel infrastructure in tracked user sources
+
+--- FULL TEST SUITE ---
+378 passed in 0.85s (all files)
+
+=== ALL F1–F4 VERIFICATION GATES: PASS ===

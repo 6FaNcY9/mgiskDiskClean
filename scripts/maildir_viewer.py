@@ -13,7 +13,7 @@ Usage:
     python maildir_viewer.py /email/mrija.org/gabriel.hangel/.maildir .Sent
 
 Output:
-    ../mail_viewer.html   -- deploy this to nginx
+    ../mail_viewer.html   -- generated HTML report
     ../mail_viewer.json   -- raw data (for debugging)
 """
 

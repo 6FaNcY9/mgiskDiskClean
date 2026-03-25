@@ -1,0 +1,46 @@
+=== Task 10: German PDF Layout Evidence ===
+Date: 2026-03-24T17:35:47+00:00
+
+=== Targeted Test Run ===
+tests/test_pdf_german_headers.py::TestPdfModuleExists::test_import_pdf_module PASSED [  3%]
+tests/test_pdf_german_headers.py::TestPdfModuleExists::test_build_report_pdf_callable PASSED [  7%]
+tests/test_pdf_german_headers.py::TestPdfValidOutput::test_returns_bytes PASSED [ 11%]
+tests/test_pdf_german_headers.py::TestPdfValidOutput::test_non_empty_bytes PASSED [ 15%]
+tests/test_pdf_german_headers.py::TestPdfValidOutput::test_starts_with_pdf_magic PASSED [ 19%]
+tests/test_pdf_german_headers.py::TestPdfValidOutput::test_empty_records_does_not_crash PASSED [ 23%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_zusammenfassung_present PASSED [ 26%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_email_liste_present PASSED [ 30%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_betreff_column_present PASSED [ 34%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_von_column_present PASSED [ 38%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_datum_column_present PASSED [ 42%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_anhaenge_column_present PASSED [ 46%]
+tests/test_pdf_german_headers.py::TestGermanSectionHeaders::test_duplikate_column_present PASSED [ 50%]
+tests/test_pdf_german_headers.py::TestUmlautRendering::test_umlaut_in_subject_appears_in_pdf PASSED [ 53%]
+tests/test_pdf_german_headers.py::TestUmlautRendering::test_umlaut_column_header_anhaenge PASSED [ 57%]
+tests/test_pdf_german_headers.py::TestUmlautRendering::test_all_german_special_chars_font_support PASSED [ 61%]
+tests/test_pdf_german_headers.py::TestPdfDeterminism::test_two_runs_same_sha256 PASSED [ 65%]
+tests/test_pdf_german_headers.py::TestPdfDeterminism::test_ten_runs_all_same_sha256 PASSED [ 69%]
+tests/test_pdf_german_headers.py::TestPdfDeterminism::test_different_timestamps_differ PASSED [ 73%]
+tests/test_pdf_german_headers.py::TestEmailOrdering::test_emails_ordered_by_date PASSED [ 76%]
+tests/test_pdf_german_headers.py::TestPerEmailRowContent::test_subject_appears_in_table PASSED [ 80%]
+tests/test_pdf_german_headers.py::TestPerEmailRowContent::test_attachment_count_in_row PASSED [ 84%]
+tests/test_pdf_german_headers.py::TestPerEmailRowContent::test_dup_marker_for_duplicate_email PASSED [ 88%]
+tests/test_pdf_german_headers.py::TestPerEmailRowContent::test_non_duplicate_email_shows_nein PASSED [ 92%]
+tests/test_pdf_german_headers.py::TestSummaryCounts::test_total_email_count_in_summary PASSED [ 96%]
+tests/test_pdf_german_headers.py::TestTimestampInPdf::test_timestamp_year_appears_in_pdf PASSED [100%]
+====================== 26 passed, 192 deselected in 0.19s ======================
+
+=== Full Suite ===
+........................................................................ [ 99%]
+..                                                                       [100%]
+218 passed in 0.39s
+
+=== No datetime.now() in changed files ===
+ast-grep datetime.now() in pdf.py and test: 0 matches (verified)
+
+=== LSP diagnostics on pdf.py ===
+src/maildir_report/pdf.py: No diagnostics (0 errors)
+
+=== Files created ===
+src/maildir_report/pdf.py
+tests/test_pdf_german_headers.py

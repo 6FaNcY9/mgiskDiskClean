@@ -1,0 +1,61 @@
+{
+  "active_plan": "/home/vino/Documents/Projekts/mrijaPageClean/.sisyphus/plans/maildir-pdf-report.md",
+  "started_at": "2026-03-24T16:08:00.747Z",
+  "session_ids": [
+    "ses_2dff6c5ccffe8Kd8dJl29GQHdg",
+    "ses_2df643708ffeMKNNuCrlvQmcCc",
+    "ses_2df64374fffehitNPllTo69ugz",
+    "ses_2df6436c3ffeuvhWQooEbgJGEf",
+    "ses_2df64368dffeCGJnmWMyUTHZep",
+    "ses_2df5f8235ffeg9i33K7HbrxHvY",
+    "ses_2df55aabeffeRFrTh3cTghAAAB",
+    "ses_2df4e5f0cffeCGIAWI0Epvet0p",
+    "ses_2df46075bffeUzbTgJmQCcLUTL",
+    "ses_2df3e58b5ffer2aTB7u1DYaCQe",
+    "ses_2df38426fffeHe3bxeg1lGv3dF",
+    "ses_2df320ecaffeq6SZ2M2tKglUIH",
+    "ses_2df2a8916ffeTrzvIXetU3sOCG",
+    "ses_2df2208efffeXiQDjPCF0XjWBv",
+    "ses_2df1c79cdffed0Bof7zPmPQEbp",
+    "ses_2def3fbe9ffe8Zar1pxyAnipK1",
+    "ses_2dee1f6d7ffe1mW2v4iUxgjLct",
+    "ses_2ded042e6ffelgJeSBQgg1cxuP",
+    "ses_2d9a80c44ffeDXGk3v5ix0O8te",
+    "ses_2d9a2b807ffeN2uSW5x1FlfW7B",
+    "ses_2d99c1e57ffeRCV14L3XOdNre0",
+    "ses_2d99c1c85ffeRofLCKu177s5eJ",
+    "ses_2d99c19abffeWe25WXkk2KEv8F",
+    "ses_2d99c1ae7ffeiNTEOFDcfjug6h"
+  ],
+  "plan_name": "maildir-pdf-report",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:15": {
+      "task_key": "todo:15",
+      "task_label": "15",
+      "task_title": "Update `devenv.nix` workflow commands (remove serving, keep scan-mailbox)",
+      "session_id": "ses_2d9a80c44ffeDXGk3v5ix0O8te",
+      "agent": "Sisyphus-Junior",
+      "category": "devops",
+      "updated_at": "2026-03-25T18:55:07.184Z"
+    },
+    "todo:16": {
+      "task_key": "todo:16",
+      "task_label": "16",
+      "task_title": "Strip serving stack from repo (nginx + cloudflared)",
+      "session_id": "ses_2d9a2b807ffeN2uSW5x1FlfW7B",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-03-25T19:01:46.653Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "Determinism + audit verification",
+      "session_id": "ses_2d99c1e57ffeRCV14L3XOdNre0",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-low",
+      "updated_at": "2026-03-25T19:35:52.834Z"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+Configuring shell
+Configuring shell in 6.37ms
+Loading tasks
+Loading tasks in 754µs
+Running tasks     devenv:enterShell
+
+Running tasks
+Running           devenv:python:virtualenv
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.91ms)
+Succeeded         devenv:python:virtualenv (16.78ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.25ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+Running tasks in 24.4ms
+1 Skipped, 3 Succeeded
+Configuring shell
+Configuring shell in 1.22ms
+
+  mgiskDiskClean devenv
+  ──────────────────────────────────────────────────────
+  scan-mailbox <mailbox>   rsync maildir locally, scan, deploy
+  scan-upload              upload legacy scripts to server
+  pull-report <maildir>    pull mail_report.html from server
+  pull-disk-report         pull disk_report.html from server
+  deploy-report <file>     deploy local html to reports/
+  set-password             set/reset boss nginx login password
+  serve-start              start nginx on :8765
+  serve-stop               stop nginx
+  serve-reload             reload nginx (no downtime)
+  ──────────────────────────────────────────────────────
+  reports : /home/vino/Documents/Projekts/mrijaPageClean/reports/
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collected 106 items / 90 deselected / 16 selected
+
+tests/test_sha256.py ...............                                     [ 93%]
+tests/test_stable_ids.py .                                               [100%]
+
+====================== 16 passed, 90 deselected in 0.04s =======================
+
+--- FULL SUITE ---
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+........................................................................ [ 67%]
+..................................                                       [100%]
+106 passed in 0.15s
+
+--- AST-GREP MD5 SCAN (src/maildir_report, tests) ---
+No matches found (MD5-free)
+
+--- FILES CHANGED ---
+CREATED:  src/maildir_report/hash.py
+CREATED:  tests/test_sha256.py
+MODIFIED: src/maildir_report/parser.py (import sha256_hex from hash; use it for content_hash)

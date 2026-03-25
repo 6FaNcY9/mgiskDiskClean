@@ -1,0 +1,38 @@
+Task 7 — message/rfc822 nested message handling (2026-03-24)
+=============================================================
+
+TARGETED TESTS (pytest -q -k "rfc822"):
+  11 passed, 126 deselected in 0.05s
+
+FULL SUITE (pytest -q):
+  137 passed in 0.19s (was 126 before Task 7; +11 new tests)
+
+LSP DIAGNOSTICS (parser.py):
+  No diagnostics found (0 errors, 0 warnings)
+
+CHANGED FILES:
+  - src/maildir_report/parser.py
+      * Added `import email.message as _emsg` at top level
+      * Replaced `if ct == "message/rfc822": continue` with explicit handler:
+          - Sets `has_nested_messages = True` on the outer email record
+          - Serialises sub-message to bytes via `sub_msg.as_bytes()`
+          - Creates a part dict with category="nested_message", filename="[nested message]"
+          - Computes stable_id and content_hash deterministically
+          - Appends to raw_parts (no silent skip)
+      * Added `has_nested_messages` field to assembled EmailRecord
+
+  - tests/test_rfc822.py (NEW — 276 lines)
+      * TestRfc822NestedPresence: 5 tests — part presence, mime type, filename, stable_id, content_hash
+      * TestRfc822Flag: 3 tests — flag True/False variants
+      * TestRfc822Determinism: 3 tests — identical repeated parse, distinct hashes for distinct payloads, non-empty hash
+
+AST-GREP CONFIRMATION:
+  Explicit `if ct == "message/rfc822":` branch found at parser.py:206
+
+REPRESENTATION DESIGN:
+  Nested messages appear as a part in the parts inventory:
+    { "category": "nested_message", "mime": "message/rfc822",
+      "filename": "[nested message]", "content_hash": <sha256>,
+      "stable_id": <sha256>, "size": <int>, ... }
+  Email record carries: has_nested_messages: bool
+  No recursion (Task 8 scope). Fully deterministic.

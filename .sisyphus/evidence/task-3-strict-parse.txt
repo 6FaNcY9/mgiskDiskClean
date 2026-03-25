@@ -1,0 +1,54 @@
+Configuring shell
+Configuring shell in 6.00ms
+Loading tasks
+Loading tasks in 763µs
+Running tasks     devenv:enterShell
+
+Running tasks
+Running           devenv:python:virtualenv
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.44ms)
+Succeeded         devenv:python:virtualenv (15.69ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.47ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+Running tasks in 23.6ms
+1 Skipped, 3 Succeeded
+Configuring shell
+Configuring shell in 1.29ms
+
+  mgiskDiskClean devenv
+  ──────────────────────────────────────────────────────
+  scan-mailbox <mailbox>   rsync maildir locally, scan, deploy
+  scan-upload              upload legacy scripts to server
+  pull-report <maildir>    pull mail_report.html from server
+  pull-disk-report         pull disk_report.html from server
+  deploy-report <file>     deploy local html to reports/
+  set-password             set/reset boss nginx login password
+  serve-start              start nginx on :8765
+  serve-stop               stop nginx
+  serve-reload             reload nginx (no downtime)
+  ──────────────────────────────────────────────────────
+  reports : /home/vino/Documents/Projekts/mrijaPageClean/reports/
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collected 58 items / 23 deselected / 35 selected
+
+tests/test_strict_parse.py ...................................           [100%]
+
+====================== 35 passed, 23 deselected in 0.07s =======================
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collected 58 items / 23 deselected / 35 selected
+
+tests/test_strict_parse.py ...................................           [100%]
+
+====================== 35 passed, 23 deselected in 0.07s =======================
+--- QA fix run (2026-03-24): pyright annotation fix, 35 passed ---

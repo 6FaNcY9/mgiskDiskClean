@@ -1,0 +1,65 @@
+Configuring shell
+Configuring shell in 6.35ms
+Loading tasks
+Loading tasks in 869µs
+Running tasks     devenv:enterShell
+
+Running tasks
+Running           devenv:python:virtualenv
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.36ms)
+Succeeded         devenv:python:virtualenv (16.40ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.65ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+Running tasks in 24.5ms
+1 Skipped, 3 Succeeded
+Configuring shell
+Configuring shell in 1.42ms
+
+  mgiskDiskClean devenv
+  ──────────────────────────────────────────────────────
+  scan-mailbox <mailbox>   rsync maildir locally, scan, deploy
+  scan-upload              upload legacy scripts to server
+  pull-report <maildir>    pull mail_report.html from server
+  pull-disk-report         pull disk_report.html from server
+  deploy-report <file>     deploy local html to reports/
+  set-password             set/reset boss nginx login password
+  serve-start              start nginx on :8765
+  serve-stop               stop nginx
+  serve-reload             reload nginx (no downtime)
+  ──────────────────────────────────────────────────────
+  reports : /home/vino/Documents/Projekts/mrijaPageClean/reports/
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0 -- /home/vino/Documents/Projekts/mrijaPageClean/.devenv/state/venv/bin/python3.13
+cachedir: .pytest_cache
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+testpaths: tests
+collecting ... collected 192 items / 172 deselected / 20 selected
+
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_iso_with_utc_offset_zero PASSED [  5%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_iso_with_positive_offset PASSED [ 10%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_iso_with_negative_offset PASSED [ 15%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_iso_naive_string_treated_as_utc PASSED [ 20%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_iso_compact_format PASSED [ 25%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_invalid_string_raises_value_error PASSED [ 30%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_empty_string_raises_value_error PASSED [ 35%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_parse_date_only_string_raises_value_error PASSED [ 40%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_result_is_always_utc PASSED [ 45%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_iso_string_round_trip PASSED [ 50%]
+tests/test_pdf_determinism.py::TestParseReportTimestamp::test_same_timestamp_same_result PASSED [ 55%]
+tests/test_pdf_determinism.py::TestConfigureDeterministicPdf::test_configure_sets_invariant_true PASSED [ 60%]
+tests/test_pdf_determinism.py::TestConfigureDeterministicPdf::test_configure_idempotent PASSED [ 65%]
+tests/test_pdf_determinism.py::TestConfigureDeterministicPdf::test_configure_returns_none PASSED [ 70%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_two_runs_same_sha256 PASSED [ 75%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_different_timestamps_produce_different_pdfs PASSED [ 80%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_different_content_produces_different_pdfs PASSED [ 85%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_many_runs_all_same_sha256 PASSED [ 90%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_pdf_bytes_are_nonempty PASSED [ 95%]
+tests/test_pdf_determinism.py::TestPdfByteDeterminism::test_pdf_starts_with_pdf_signature PASSED [100%]
+
+====================== 20 passed, 172 deselected in 0.09s ======================

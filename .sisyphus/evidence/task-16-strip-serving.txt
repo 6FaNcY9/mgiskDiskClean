@@ -1,3 +1,24 @@
+=== task-16-strip-serving QA evidence (corrected) ===
+Date: Wed Mar 25 07:04:12 PM UTC 2026
+
+--- Serving keyword checks (user files, excl .devenv/.git/.sisyphus) ---
+PASS [tunnel-start]
+PASS [serve-start]
+PASS [serve-stop]
+PASS [serve-reload]
+PASS [nginx]
+PASS [cloudflared]
+
+--- nginx/ and cloudflared/ directories ---
+PASS: nginx/ removed
+PASS: cloudflared/ removed
+
+--- README.md output filenames match CLI constants ---
+39:#   report.pdf       — German PDF report
+40:#   manifest.json   — audited JSON manifest (includes PDF SHA-256)
+41:#   decisions.csv   — editable keep/delete decisions template
+
+--- README.md full content ---
 # mgiskDiskClean
 
 Self-contained devenv for mrija.org mailbox disk cleanup.
@@ -51,3 +72,5 @@ scan-mailbox <mailbox>
 
 - Reports are written to `reports/` — do NOT commit that directory to git
 - Do NOT commit `logs/` to git
+
+=== END evidence ===

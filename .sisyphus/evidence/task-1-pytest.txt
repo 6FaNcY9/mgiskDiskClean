@@ -1,0 +1,37 @@
+Configuring shell
+Configuring shell in 3.16s
+Loading tasks
+Loading tasks in 267ms
+Running tasks     devenv:enterShell
+
+Running tasks
+Running           devenv:files:cleanup
+Running           devenv:python:virtualenv
+Succeeded         devenv:files:cleanup (15.76ms)
+Succeeded         devenv:python:virtualenv (17.16ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.20ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+Running tasks in 25.0ms
+1 Skipped, 3 Succeeded
+Configuring shell
+Configuring shell in 1.34ms
+
+  mgiskDiskClean devenv
+  ──────────────────────────────────────────────────────
+  scan-mailbox <mailbox>   rsync maildir locally, scan, deploy
+  scan-upload              upload legacy scripts to server
+  pull-report <maildir>    pull mail_report.html from server
+  pull-disk-report         pull disk_report.html from server
+  deploy-report <file>     deploy local html to reports/
+  set-password             set/reset boss nginx login password
+  serve-start              start nginx on :8765
+  serve-stop               stop nginx
+  serve-reload             reload nginx (no downtime)
+  ──────────────────────────────────────────────────────
+  reports : /home/vino/Documents/Projekts/mrijaPageClean/reports/
+  logs    : /home/vino/Documents/Projekts/mrijaPageClean/logs/
+
+...                                                                      [100%]
+3 passed in 0.01s
