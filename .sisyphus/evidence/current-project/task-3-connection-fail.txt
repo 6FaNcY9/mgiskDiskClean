@@ -1,0 +1,32 @@
+TASK 3 — MySQL Migration Runner: Connection Failure Safety
+Scenario: Connection failure fails safely (invalid credentials)
+Date: 2026-03-26
+PHP: 8.3.30 (devenv)
+
+=== Test: Invalid credentials (bad socket path, wrong host/port) ===
+Config used: temp config with:
+  socket   = /nonexistent/mysql.sock  (does not exist)
+  host     = 127.0.0.1
+  port     = 19999  (no MySQL on this port)
+  user     = wrong_user
+  password = [REDACTED — not shown; checked not in output]
+
+Command: php web/src/cli/migrate.php --config /tmp/local_bad_creds.php
+
+Output to stderr:
+  ERROR: DB connection failed: SQLSTATE[HY000] [2002] Connection refused
+
+Exit code: 1
+
+=== Secret leak check ===
+Output checked for literal password string: PASS
+Password NOT echoed in any output stream.
+No stack trace in output.
+Only safe non-sensitive message shown: "ERROR: DB connection failed: SQLSTATE[HY000] [2002] Connection refused"
+
+Note: The SQLSTATE code is standard and does not reveal credentials.
+PHP PDO exception message omits the password from its text.
+
+=== RESULT: PASS ===
+Connection failure exits with code 1.
+Output is non-sensitive: no credentials, no file paths, no stack traces.
