@@ -566,7 +566,7 @@ Wave 4: export + local cleanup tool + deployment hardening + end-to-end QA on re
 
   **Commit**: YES | Message: `feat(web): attachment access` | Files: `web/src/**`, `web/public/index.php`, (optional) `src/maildir_report/**`
 
-- [ ] 8. Bulk decision workflows (make 100k-email review feasible)
+- [x] 8. Bulk decision workflows (make 100k-email review feasible)
 
   **What to do**:
   - Implement bulk-apply actions to avoid manual per-row clicking:

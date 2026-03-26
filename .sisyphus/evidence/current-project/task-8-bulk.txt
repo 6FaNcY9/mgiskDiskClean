@@ -1,0 +1,34 @@
+==================================================================
+Task 8 Bulk Decision Workflows QA -- 2026-03-26T06:42:10Z
+==================================================================
+
+==> Setting up fixture data in MariaDB ...
+  Fixture inserted: report testreport8, 5 emails (3 in group1, 2 standalone).
+
+==> Starting PHP server on http://127.0.0.1:8108 ...
+  PHP server running (PID 981156).
+
+==> Logging in as coworker ...
+  Logged in as coworker.
+  CSRF token obtained: HPWLy1FTEdRf...
+
+--- Test 1: bulk-apply without confirm=1 (dry-run) ---
+  Response: {"dry_run":true,"count":5}
+  PASS: dry_run=true returned, count=5 (expected 5)
+
+--- Test 2: bulk-apply with confirm=1 for decision=delete on testreport8 ---
+  Response: {"updated":5}
+  PASS: bulk-apply updated 5 rows (all decisions in testreport8)
+
+--- Test 3: dup-group-action on group1 ---
+  Response: {"kept":1,"deleted":2}
+  PASS: dup-group-action: kept=1, deleted=2
+
+--- Test 4: CSRF token missing -> expect HTTP 403 ---
+  HTTP status: 403 (expected 403)
+  PASS: CSRF-missing -> HTTP 403
+
+==================================================================
+ALL TESTS PASSED
+==================================================================
+==> Server stopped.
