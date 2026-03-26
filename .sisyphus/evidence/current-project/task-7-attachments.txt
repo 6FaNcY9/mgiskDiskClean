@@ -1,0 +1,45 @@
+==================================================================
+Task 7 Attachment Download QA -- 2026-03-26T06:33:45Z
+==================================================================
+
+==> Setting up fixture data ...
+  Created attachment: /home/vino/Documents/Projekts/mrijaPageClean/data/mailboxes/testbox/attachments/cf2fa106e2607e854b12b261ce0e248dd0aeaba79a3f2cc88508d9d436955f1f_24.txt
+  sha256: cf2fa106e2607e854b12b261ce0e248dd0aeaba79a3f2cc88508d9d436955f1f  size: 24 bytes
+  SQLite fixture ready (index.sqlite updated).
+
+==> Starting PHP server on http://127.0.0.1:8099 ...
+  PHP server running (PID 940871).
+
+==> Logging in as coworker ...
+  Logged in as coworker.
+
+--- Test 1: Unauthenticated request (no auth cookie) ---
+  GET (no cookie): HTTP 302  (expected: 302)
+  PASS: Unauthenticated request redirected/rejected (HTTP 302)
+
+--- Test 2: Authenticated coworker — valid attachment download ---
+  GET (auth) http://127.0.0.1:8099/download/attachment/c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c/6b055e0f296ff239f745500dc013220eb9b16fb6e3a2c6b3f5e68edd18508d02/cf2fa106e2607e854b12b261ce0e248dd0aeaba79a3f2cc88508d9d436955f1f
+  HTTP response: 200  (expected: 200)
+  Content received: 24 bytes
+  PASS: Attachment downloaded successfully (HTTP 200, 24 bytes)
+
+--- Test 3: Path traversal attempts (sha256 position) ---
+  [1] ../ traversal: HTTP 404
+  PASS: Raw traversal (../): HTTP 404 — REJECTED
+  [2] URL-encoded ../: HTTP 404
+  PASS: URL-encoded traversal: HTTP 404 — REJECTED
+  [3] Non-hex 64-char sha256: HTTP 404
+  PASS: Non-hex 64-char sha256: HTTP 404 — REJECTED
+
+--- Test 4: Mismatched report_id ---
+  GET (report_id='aaaa...64'): HTTP 404  (expected: 404)
+  PASS: Mismatched report_id: HTTP 404 — REJECTED
+
+--- Test 5: Unknown sha256 (valid hex format, not in index) ---
+  GET (sha256='1111...64'): HTTP 404  (expected: 404)
+  PASS: Unknown sha256 returns HTTP 404
+
+==================================================================
+ALL 5 TESTS PASSED
+==================================================================
+==> Server stopped.

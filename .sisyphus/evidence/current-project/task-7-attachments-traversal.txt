@@ -1,0 +1,32 @@
+==================================================================
+Task 7 Path Traversal Rejection Proof
+Date: 2026-03-26T06:33:45Z
+==================================================================
+
+Route pattern in web/public/index.php:
+  preg_match('#^/download/attachment/([^/]+)/([^/]+)/([0-9a-fA-F]{64})$#', $path, $am)
+
+The sha256 capture group requires EXACTLY 64 chars from [0-9a-fA-F].
+Any path traversal char (., /, \, %, null) is rejected at route level.
+stored_path is additionally guarded by DownloadService::assertPathUnderRoot().
+
+Attempt 1: sha256='../../../../etc/passwd'
+  HTTP response: 404
+  RESULT: PASS (HTTP 404)
+
+Attempt 2: sha256='%2E%2E%2F%2E%2E%2Fetc%2Fpasswd' (URL-encoded)
+  HTTP response: 404
+  RESULT: PASS (HTTP 404)
+
+Attempt 3: sha256='000000000000000000000000000000000000000000000000000000000000000g' (64 chars, 'g' is not in [0-9a-fA-F])
+  HTTP response: 404
+  RESULT: PASS (HTTP 404)
+
+==================================================================
+Summary: All path traversal attempts rejected.
+Security layers:
+  1. Route regex: [0-9a-fA-F]{64} — rejects non-hex / short strings
+  2. DownloadService::assertPathUnderRoot() — verifies stored_path
+     is under data_dir/mailboxes/<mailbox>/attachments/
+  3. MariaDB scope check: report_id must own the email_stable_id
+==================================================================
