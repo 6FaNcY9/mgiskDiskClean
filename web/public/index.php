@@ -1105,6 +1105,199 @@ if ($path === '/review/dup-group-action' && $method === 'POST') {
     exit(0);
 }
 
+// ── GET /admin/export/decisions — stream reviewed decisions CSV (admin only) ─
+//
+// Columns (stable_id order): stable_id, date, sender, subject, size_bytes,
+//   has_attachments, attachment_count, attachment_total_bytes, attachment_extensions,
+//   dup_group_id, dup_rank, total_size_bytes, decision, note
+// NOTE: emails table stores total_size_bytes but not the per-attachment breakdown.
+// has_attachments/attachment_count/attachment_total_bytes/attachment_extensions are
+// stored in the seed CSV only; they are not in the DB schema. We export '' for those
+// columns so the schema is preserved (the columns are present, values are blank).
+if ($path === '/admin/export/decisions' && $method === 'GET') {
+    $session->requireAuth('/login.php');
+    $session->requireRole('admin', '/login.php');
+
+    $reportId = trim($_GET['report_id'] ?? '');
+    if ($reportId === '') {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Missing required parameter: report_id';
+        exit(0);
+    }
+
+    try {
+        $pdo = $makePdo();
+
+        // Validate report exists
+        $chk = $pdo->prepare('SELECT 1 FROM reports WHERE report_id = :rid LIMIT 1');
+        $chk->execute([':rid' => $reportId]);
+        if ($chk->fetchColumn() === false) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Report not found.';
+            exit(0);
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="decisions.reviewed.csv"');
+        header('Cache-Control: private, no-cache');
+
+        // Disable output buffering so rows stream immediately
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        $out = fopen('php://output', 'w');
+        // BOM-free CSV; Excel-safe via proper fputcsv quoting
+        fputcsv($out, [
+            'stable_id', 'date', 'sender', 'subject', 'size_bytes',
+            'has_attachments', 'attachment_count', 'attachment_total_bytes',
+            'attachment_extensions', 'dup_group_id', 'dup_rank', 'total_size_bytes',
+            'decision', 'note',
+        ]);
+
+        $stmt = $pdo->prepare(<<<SQL
+            SELECT
+                e.stable_id,
+                e.date,
+                e.sender,
+                e.subject,
+                e.total_size_bytes   AS size_bytes,
+                e.dup_group_id,
+                e.dup_rank,
+                e.total_size_bytes,
+                COALESCE(d.decision, '') AS decision,
+                COALESCE(d.note,     '') AS note
+            FROM emails e
+            LEFT JOIN decisions d
+                ON  d.report_id = e.report_id
+                AND d.stable_id = e.stable_id
+            WHERE e.report_id = :rid
+            ORDER BY e.date ASC, e.stable_id ASC
+        SQL);
+        $stmt->execute([':rid' => $reportId]);
+
+        while ($row = $stmt->fetch()) {
+            fputcsv($out, [
+                (string)($row['stable_id']      ?? ''),
+                (string)($row['date']           ?? ''),
+                (string)($row['sender']         ?? ''),
+                (string)($row['subject']        ?? ''),
+                (string)($row['size_bytes']     ?? ''),  // size_bytes
+                '',                                      // has_attachments (not in DB)
+                '',                                      // attachment_count (not in DB)
+                '',                                      // attachment_total_bytes (not in DB)
+                '',                                      // attachment_extensions (not in DB)
+                (string)($row['dup_group_id']   ?? ''),
+                (string)($row['dup_rank']       ?? ''),
+                (string)($row['total_size_bytes'] ?? ''),
+                (string)($row['decision']       ?? ''),
+                (string)($row['note']           ?? ''),
+            ]);
+        }
+        fclose($out);
+    } catch (\PDOException $e) {
+        // Headers may already be sent; log and exit
+        error_log('Export decisions DB error: ' . $e->getMessage());
+    }
+    exit(0);
+}
+
+// ── GET /admin/export/audit — stream audit CSV with review metadata (admin only)
+//
+// Same as /admin/export/decisions but appends updated_by, updated_at, note columns.
+if ($path === '/admin/export/audit' && $method === 'GET') {
+    $session->requireAuth('/login.php');
+    $session->requireRole('admin', '/login.php');
+
+    $reportId = trim($_GET['report_id'] ?? '');
+    if ($reportId === '') {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Missing required parameter: report_id';
+        exit(0);
+    }
+
+    try {
+        $pdo = $makePdo();
+
+        // Validate report exists
+        $chk = $pdo->prepare('SELECT 1 FROM reports WHERE report_id = :rid LIMIT 1');
+        $chk->execute([':rid' => $reportId]);
+        if ($chk->fetchColumn() === false) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Report not found.';
+            exit(0);
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="decisions.audit.csv"');
+        header('Cache-Control: private, no-cache');
+
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, [
+            'stable_id', 'date', 'sender', 'subject', 'size_bytes',
+            'has_attachments', 'attachment_count', 'attachment_total_bytes',
+            'attachment_extensions', 'dup_group_id', 'dup_rank', 'total_size_bytes',
+            'decision', 'note', 'updated_by', 'updated_at',
+        ]);
+
+        $stmt = $pdo->prepare(<<<SQL
+            SELECT
+                e.stable_id,
+                e.date,
+                e.sender,
+                e.subject,
+                e.total_size_bytes   AS size_bytes,
+                e.dup_group_id,
+                e.dup_rank,
+                e.total_size_bytes,
+                COALESCE(d.decision,   '') AS decision,
+                COALESCE(d.note,       '') AS note,
+                COALESCE(d.updated_by, '') AS updated_by,
+                COALESCE(d.updated_at, '') AS updated_at
+            FROM emails e
+            LEFT JOIN decisions d
+                ON  d.report_id = e.report_id
+                AND d.stable_id = e.stable_id
+            WHERE e.report_id = :rid
+            ORDER BY e.date ASC, e.stable_id ASC
+        SQL);
+        $stmt->execute([':rid' => $reportId]);
+
+        while ($row = $stmt->fetch()) {
+            fputcsv($out, [
+                (string)($row['stable_id']      ?? ''),
+                (string)($row['date']           ?? ''),
+                (string)($row['sender']         ?? ''),
+                (string)($row['subject']        ?? ''),
+                (string)($row['size_bytes']     ?? ''),
+                '',                                       // has_attachments (not in DB)
+                '',                                       // attachment_count (not in DB)
+                '',                                       // attachment_total_bytes (not in DB)
+                '',                                       // attachment_extensions (not in DB)
+                (string)($row['dup_group_id']   ?? ''),
+                (string)($row['dup_rank']       ?? ''),
+                (string)($row['total_size_bytes'] ?? ''),
+                (string)($row['decision']       ?? ''),
+                (string)($row['note']           ?? ''),
+                (string)($row['updated_by']     ?? ''),
+                (string)($row['updated_at']     ?? ''),
+            ]);
+        }
+        fclose($out);
+    } catch (\PDOException $e) {
+        error_log('Export audit DB error: ' . $e->getMessage());
+    }
+    exit(0);
+}
+
 // 404 fallback
 http_response_code(404);
 header('Content-Type: text/plain; charset=utf-8');

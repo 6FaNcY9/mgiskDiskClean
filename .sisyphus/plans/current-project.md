@@ -612,7 +612,7 @@ Wave 4: export + local cleanup tool + deployment hardening + end-to-end QA on re
 
   **Commit**: YES | Message: `feat(web): bulk review actions` | Files: `web/src/**`, `web/public/index.php`, `web/assets/**`
 
-- [ ] 9. Admin: export reviewed decisions CSV for local execution
+- [x] 9. Admin: export reviewed decisions CSV for local execution
 
   **What to do**:
   - Provide admin-only export endpoints for a `report_id`:

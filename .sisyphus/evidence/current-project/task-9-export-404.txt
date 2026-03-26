@@ -1,0 +1,18 @@
+==================================================================
+Task 9 Export 404 QA -- 2026-03-26T06:48:53Z
+==================================================================
+
+
+--- Test 4: GET /admin/export/decisions?report_id=no-such-report ---
+URL: http://127.0.0.1:8109/admin/export/decisions?report_id=no-such-report
+HTTP status: 404 (expected 404)
+Body: Report not found.
+PASS: fake report_id correctly returns 404
+
+URL: http://127.0.0.1:8109/admin/export/audit?report_id=no-such-report
+HTTP status: 404 (expected 404)
+PASS: audit 404 for fake report_id
+
+==================================================================
+Task 9 Export 404 tests complete
+==================================================================
