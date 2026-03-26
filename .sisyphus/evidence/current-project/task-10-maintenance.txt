@@ -1,0 +1,41 @@
+Task 10: Maintenance Mode Evidence
+===================================
+Date: 2026-03-26
+
+QA Script: web/scripts/qa-task10-hardening.sh
+PHP built-in server on port 8799
+
+--- Test 1: web/maintenance.flag EXISTS → expect HTTP 503 ---
+
+$ touch web/maintenance.flag
+$ curl -s -o /tmp/body.txt -w "%{http_code}" http://127.0.0.1:8799/
+
+HTTP status: 503
+Body: <h1>Maintenance</h1><p>The app is temporarily offline. Please try again later.</p>
+
+Response also includes header: Retry-After: 3600
+
+RESULT: PASS — HTTP 503 returned when maintenance.flag exists
+
+--- Test 2: web/maintenance.flag REMOVED → expect HTTP 200 or 302 ---
+
+$ rm web/maintenance.flag
+$ curl -s -o /tmp/body2.txt -w "%{http_code}" http://127.0.0.1:8799/
+
+HTTP status: 302
+(Redirects to /login.php — unauthenticated request)
+
+RESULT: PASS — HTTP 302 returned when maintenance.flag is absent
+
+Implementation in web/public/index.php (lines 50-57):
+------------------------------------------------------
+// ── Maintenance mode check ─────────────────────────────────────────────────
+// Checked before config load and any DB connections.
+if (file_exists(__DIR__ . '/../maintenance.flag')) {
+    http_response_code(503);
+    header('Retry-After: 3600');
+    echo '<h1>Maintenance</h1><p>The app is temporarily offline. Please try again later.</p>';
+    exit;
+}
+
+Flag path: web/maintenance.flag  (relative to web/public/index.php → ../maintenance.flag)

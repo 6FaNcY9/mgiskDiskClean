@@ -654,7 +654,7 @@ Wave 4: export + local cleanup tool + deployment hardening + end-to-end QA on re
 
   **Commit**: YES | Message: `feat(web): export reviewed decisions csv` | Files: `web/src/**`, `web/public/index.php`
 
-- [ ] 10. Deployment hardening (FTP) + operational docs
+- [x] 10. Deployment hardening (FTP) + operational docs
 
   **What to do**:
   - Add `web/public/.htaccess` (if Apache) to rewrite to index.php and deny direct access to sensitive paths.

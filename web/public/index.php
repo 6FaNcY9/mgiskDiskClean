@@ -40,6 +40,22 @@ set_error_handler(function (int $errno, string $errstr, string $errfile, int $er
     throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
 });
 
+// ── Security headers ───────────────────────────────────────────────────────
+// Sent before any output, config load, or DB connections.
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
+
+// ── Maintenance mode check ─────────────────────────────────────────────────
+// Checked before config load and any DB connections.
+if (file_exists(__DIR__ . '/../maintenance.flag')) {
+    http_response_code(503);
+    header('Retry-After: 3600');
+    echo '<h1>Maintenance</h1><p>The app is temporarily offline. Please try again later.</p>';
+    exit;
+}
+
 // ── Config bootstrap ───────────────────────────────────────────────────────
 $configPath = dirname(__DIR__) . '/config/local.php';
 
@@ -53,21 +69,6 @@ if (!is_file($configPath)) {
 
 /** @var array<string,mixed> $config */
 $config = require $configPath;
-
-// ── Security headers ───────────────────────────────────────────────────────
-header('X-Frame-Options: DENY');
-header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: same-origin');
-header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'");
-
-// ── Maintenance mode check ─────────────────────────────────────────────────
-$maintenanceFlag = dirname(__DIR__) . '/data/.maintenance';
-if (is_file($maintenanceFlag)) {
-    http_response_code(503);
-    header('Retry-After: 3600');
-    echo 'Service temporarily unavailable for maintenance. Please try again later.';
-    exit(0);
-}
 
 // ── Autoload (simple PSR-4-like; no Composer) ─────────────────────────────
 spl_autoload_register(function (string $class): void {

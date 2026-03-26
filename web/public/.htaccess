@@ -1,0 +1,8 @@
+Options -Indexes
+RewriteEngine On
+# Deny config/src if accidentally in webroot
+RewriteRule ^(config|src)/ - [F,L]
+# Route all non-file requests through index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
