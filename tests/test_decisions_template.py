@@ -1,22 +1,30 @@
 """
-test_decisions_template.py — TDD tests for Task 13: decisions template generator.
+test_decisions_template.py — TDD tests for Task 1: enriched decisions template generator.
 
 Contracts being tested
 ----------------------
 decisions_template.py
     generate_decisions_template(records) -> list[dict[str, str]]
         - Returns one row dict per email record (no drops, no duplicates).
-        - Row dict contains exactly the keys: "stable_id", "filepath", "decision".
+        - Row dict contains exactly the 14 canonical keys in _HEADERS order.
         - "stable_id" matches the record's "stable_id" field verbatim.
         - "filepath" matches the record's "filepath" field verbatim.
         - "decision" is an empty string (blank field for reviewer input).
+        - "folder", "date", "from", "subject" copied from record fields.
+        - "total_size_bytes" is a string representation of total_size.
+        - "attachment_count" counts all parts in the record.
+        - "attachment_total_bytes" sums part sizes.
+        - "attachment_names" is semicolon-separated filenames; empty if no parts.
+        - "is_duplicate" is "true" when dup_group_id is set, else "false".
+        - "dup_group_id" is 64-hex string or empty string.
+        - "dup_rank" is integer string or empty string.
         - Row order matches sort_emails(records) — identical to PDF/manifest order.
         - Deterministic: same inputs always produce equal row lists.
         - Empty input returns empty list.
 
     serialize_decisions_csv(rows) -> str
         - Serialises the row list to a deterministic CSV string.
-        - Header row: stable_id,filepath,decision
+        - Header row: 14 columns in canonical order.
         - Rows appear in the same order as the input list (no re-sorting).
         - CSV-safe: values with commas/quotes/newlines are properly escaped.
         - Deterministic: same rows always produce the same CSV bytes.
@@ -36,7 +44,40 @@ import json
 import pytest
 
 
-# ── helpers ────────────────────────────────────────────────────────────────────
+# ── canonical header list ───────────────────────────────────────────────────
+
+EXPECTED_HEADERS = [
+    "stable_id",
+    "filepath",
+    "decision",
+    "folder",
+    "date",
+    "from",
+    "subject",
+    "total_size_bytes",
+    "attachment_count",
+    "attachment_total_bytes",
+    "attachment_names",
+    "is_duplicate",
+    "dup_group_id",
+    "dup_rank",
+]
+
+
+# ── helpers ────────────────────────────────────────────────────────────────
+
+
+def _make_part(filename: str = "doc.pdf", size: int = 1024) -> dict:
+    """Return a minimal PartRecord-like dict."""
+    return {
+        "filename": filename,
+        "mime": "application/pdf",
+        "size": size,
+        "content_hash": "a" * 64,
+        "category": "pdf",
+        "is_dup": False,
+        "dup_group_id": None,
+    }
 
 
 def _make_record(
@@ -46,6 +87,11 @@ def _make_record(
     date: str = "2024-01-01 10:00",
     subject: str = "Test",
     sender: str = "a@example.com",
+    folder: str = "INBOX",
+    total_size: int = 100,
+    parts: list | None = None,
+    dup_group_id: str | None = None,
+    dup_rank: int | None = None,
 ) -> dict:
     """Return a minimal EmailRecord-like dict."""
     from maildir_report.ids import email_stable_id
@@ -57,18 +103,18 @@ def _make_record(
         "subject": subject,
         "sender": sender,
         "to": "b@example.com",
-        "folder": "INBOX",
-        "total_size": 100,
-        "parts": [],
-        "dup_group_id": None,
-        "dup_rank": None,
+        "folder": folder,
+        "total_size": total_size,
+        "parts": parts if parts is not None else [],
+        "dup_group_id": dup_group_id,
+        "dup_rank": dup_rank,
     }
     # Use provided stable_id or compute from ids module
     rec["stable_id"] = stable_id if stable_id else email_stable_id(rec)
     return rec
 
 
-# ── import / API surface ───────────────────────────────────────────────────────
+# ── import / API surface ───────────────────────────────────────────────────
 
 
 class TestDecisionsTemplateImports:
@@ -84,7 +130,7 @@ class TestDecisionsTemplateImports:
         from maildir_report.decisions_template import serialize_decisions_json  # noqa: F401
 
 
-# ── generate_decisions_template ────────────────────────────────────────────────
+# ── generate_decisions_template ────────────────────────────────────────────
 
 
 class TestGenerateDecisionsTemplate:
@@ -123,14 +169,21 @@ class TestGenerateDecisionsTemplate:
 
         rows = generate_decisions_template([_make_record("/mail/a")])
         assert len(rows) == 1
-        assert set(rows[0].keys()) == {"stable_id", "filepath", "decision"}
+        assert set(rows[0].keys()) == set(EXPECTED_HEADERS)
 
     def test_row_has_no_extra_keys(self):
-        """Rows must have exactly the three expected keys — not more."""
+        """Rows must have exactly the 14 expected keys — not more, not fewer."""
         from maildir_report.decisions_template import generate_decisions_template
 
         rows = generate_decisions_template([_make_record("/mail/a")])
-        assert len(rows[0]) == 3
+        assert len(rows[0]) == 14
+
+    def test_row_keys_in_canonical_order(self):
+        """Keys must appear in the canonical _HEADERS order."""
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rows = generate_decisions_template([_make_record("/mail/a")])
+        assert list(rows[0].keys()) == EXPECTED_HEADERS
 
     def test_stable_id_matches_record(self):
         from maildir_report.decisions_template import generate_decisions_template
@@ -173,7 +226,188 @@ class TestGenerateDecisionsTemplate:
             assert row["decision"] == ""
 
 
-# ── ordering contract ─────────────────────────────────────────────────────────
+# ── new reviewer context fields ─────────────────────────────────────────────
+
+
+class TestGenerateDecisionsTemplateContextFields:
+    """Reviewer context columns are populated correctly."""
+
+    def test_folder_copied_from_record(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", folder="Sent")
+        rows = generate_decisions_template([rec])
+        assert rows[0]["folder"] == "Sent"
+
+    def test_date_copied_from_record(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", date="2024-05-15 09:30")
+        rows = generate_decisions_template([rec])
+        assert rows[0]["date"] == "2024-05-15 09:30"
+
+    def test_from_copied_from_sender(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", sender="alice@example.com")
+        rows = generate_decisions_template([rec])
+        assert rows[0]["from"] == "alice@example.com"
+
+    def test_subject_copied_from_record(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", subject="Hello World")
+        rows = generate_decisions_template([rec])
+        assert rows[0]["subject"] == "Hello World"
+
+    def test_total_size_bytes_is_string_of_total_size(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", total_size=4096)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["total_size_bytes"] == "4096"
+
+    def test_attachment_count_zero_when_no_parts(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", parts=[])
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_count"] == "0"
+
+    def test_attachment_count_matches_parts_length(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        parts = [_make_part("a.pdf"), _make_part("b.pdf"), _make_part("c.pdf")]
+        rec = _make_record("/mail/a", parts=parts)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_count"] == "3"
+
+    def test_attachment_total_bytes_zero_when_no_parts(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", parts=[])
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_total_bytes"] == "0"
+
+    def test_attachment_total_bytes_sums_part_sizes(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        parts = [_make_part("a.pdf", size=500), _make_part("b.docx", size=1500)]
+        rec = _make_record("/mail/a", parts=parts)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_total_bytes"] == "2000"
+
+    def test_attachment_names_empty_when_no_parts(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", parts=[])
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_names"] == ""
+
+    def test_attachment_names_semicolon_separated(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        parts = [_make_part("report.pdf"), _make_part("data.xlsx")]
+        rec = _make_record("/mail/a", parts=parts)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_names"] == "report.pdf;data.xlsx"
+
+    def test_attachment_names_single_file(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        parts = [_make_part("only.pdf")]
+        rec = _make_record("/mail/a", parts=parts)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["attachment_names"] == "only.pdf"
+
+    def test_is_duplicate_false_when_no_dup_group(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", dup_group_id=None, dup_rank=None)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["is_duplicate"] == "false"
+
+    def test_is_duplicate_true_when_dup_group_set(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        gid = "b" * 64
+        rec = _make_record("/mail/a", dup_group_id=gid, dup_rank=0)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["is_duplicate"] == "true"
+
+    def test_dup_group_id_empty_when_not_duplicate(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", dup_group_id=None)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["dup_group_id"] == ""
+
+    def test_dup_group_id_set_when_duplicate(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        gid = "c" * 64
+        rec = _make_record("/mail/a", dup_group_id=gid, dup_rank=1)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["dup_group_id"] == gid
+
+    def test_dup_rank_empty_when_not_duplicate(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", dup_rank=None)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["dup_rank"] == ""
+
+    def test_dup_rank_integer_string_when_set(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", dup_group_id="d" * 64, dup_rank=2)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["dup_rank"] == "2"
+
+    def test_dup_rank_zero_is_string_zero(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", dup_group_id="e" * 64, dup_rank=0)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["dup_rank"] == "0"
+
+    def test_subject_short_not_truncated(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        rec = _make_record("/mail/a", subject="Short subject")
+        rows = generate_decisions_template([rec])
+        assert rows[0]["subject"] == "Short subject"
+
+    def test_subject_exactly_80_chars_not_truncated(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        subject_80 = "x" * 80
+        rec = _make_record("/mail/a", subject=subject_80)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["subject"] == subject_80
+        assert len(rows[0]["subject"]) == 80
+
+    def test_subject_81_chars_gets_ellipsis(self):
+        """Subject longer than 80 chars is truncated to 80 + \u2026 (matches PDF policy)."""
+        from maildir_report.decisions_template import generate_decisions_template
+
+        subject_81 = "y" * 81
+        rec = _make_record("/mail/a", subject=subject_81)
+        rows = generate_decisions_template([rec])
+        assert rows[0]["subject"] == "y" * 80 + "\u2026"
+
+    def test_subject_very_long_truncated_to_80_plus_ellipsis(self):
+        from maildir_report.decisions_template import generate_decisions_template
+
+        subject_long = "A" * 200
+        rec = _make_record("/mail/a", subject=subject_long)
+        rows = generate_decisions_template([rec])
+        expected = "A" * 80 + "\u2026"
+        assert rows[0]["subject"] == expected
+        assert len(rows[0]["subject"]) == 81  # 80 chars + 1 ellipsis codepoint
+
+
+# ── ordering contract ─────────────────────────────────────────────────────
 
 
 class TestGenerateDecisionsTemplateOrdering:
@@ -242,7 +476,7 @@ class TestGenerateDecisionsTemplateOrdering:
         assert [r["stable_id"] for r in result] == [r["stable_id"] for r in expected]
 
 
-# ── determinism contract ──────────────────────────────────────────────────────
+# ── determinism contract ──────────────────────────────────────────────────
 
 
 class TestGenerateDecisionsTemplateDeterminism:
@@ -279,7 +513,34 @@ class TestGenerateDecisionsTemplateDeterminism:
                 assert isinstance(v, str)
 
 
-# ── serialize_decisions_csv ───────────────────────────────────────────────────
+# ── serialize_decisions_csv ───────────────────────────────────────────────
+
+
+def _make_full_row(
+    stable_id: str = "a" * 64,
+    filepath: str = "/mail/a",
+    folder: str = "INBOX",
+    date: str = "2024-01-01 10:00",
+    sender: str = "a@example.com",
+    subject: str = "Test",
+) -> dict:
+    """Return a fully-populated row dict matching the 14-column schema."""
+    return {
+        "stable_id": stable_id,
+        "filepath": filepath,
+        "decision": "",
+        "folder": folder,
+        "date": date,
+        "from": sender,
+        "subject": subject,
+        "total_size_bytes": "100",
+        "attachment_count": "0",
+        "attachment_total_bytes": "0",
+        "attachment_names": "",
+        "is_duplicate": "false",
+        "dup_group_id": "",
+        "dup_rank": "",
+    }
 
 
 class TestSerializeDecisionsCsv:
@@ -292,20 +553,20 @@ class TestSerializeDecisionsCsv:
         assert isinstance(result, str)
 
     def test_csv_empty_input_has_header_only(self):
-        """Empty row list → CSV with header row only (no trailing newline on header)."""
+        """Empty row list → CSV with header row only (no data rows)."""
         from maildir_report.decisions_template import serialize_decisions_csv
 
         result = serialize_decisions_csv([])
         reader = csv.DictReader(io.StringIO(result))
         assert list(reader) == []
-        assert reader.fieldnames == ["stable_id", "filepath", "decision"]
+        assert reader.fieldnames == EXPECTED_HEADERS
 
     def test_csv_header_row(self):
         from maildir_report.decisions_template import serialize_decisions_csv
 
         result = serialize_decisions_csv([])
         first_line = result.splitlines()[0]
-        assert first_line == "stable_id,filepath,decision"
+        assert first_line == ",".join(EXPECTED_HEADERS)
 
     def test_csv_row_count_matches_input(self):
         from maildir_report.decisions_template import (
@@ -358,6 +619,38 @@ class TestSerializeDecisionsCsv:
         data_rows = list(reader)
         assert data_rows[0]["decision"] == ""
 
+    def test_csv_context_fields_preserved(self):
+        """All reviewer context fields must round-trip through CSV correctly."""
+        from maildir_report.decisions_template import serialize_decisions_csv
+
+        row = _make_full_row(
+            folder="Sent",
+            date="2024-03-15 14:30",
+            sender="bob@example.com",
+            subject="Meeting notes",
+        )
+        row["total_size_bytes"] = "8192"
+        row["attachment_count"] = "2"
+        row["attachment_total_bytes"] = "4096"
+        row["attachment_names"] = "notes.pdf;agenda.docx"
+        row["is_duplicate"] = "true"
+        row["dup_group_id"] = "f" * 64
+        row["dup_rank"] = "1"
+        csv_str = serialize_decisions_csv([row])
+        reader = csv.DictReader(io.StringIO(csv_str))
+        data_rows = list(reader)
+        assert data_rows[0]["folder"] == "Sent"
+        assert data_rows[0]["date"] == "2024-03-15 14:30"
+        assert data_rows[0]["from"] == "bob@example.com"
+        assert data_rows[0]["subject"] == "Meeting notes"
+        assert data_rows[0]["total_size_bytes"] == "8192"
+        assert data_rows[0]["attachment_count"] == "2"
+        assert data_rows[0]["attachment_total_bytes"] == "4096"
+        assert data_rows[0]["attachment_names"] == "notes.pdf;agenda.docx"
+        assert data_rows[0]["is_duplicate"] == "true"
+        assert data_rows[0]["dup_group_id"] == "f" * 64
+        assert data_rows[0]["dup_rank"] == "1"
+
     def test_csv_deterministic(self):
         from maildir_report.decisions_template import (
             generate_decisions_template,
@@ -372,7 +665,7 @@ class TestSerializeDecisionsCsv:
         """Filepaths with commas must be properly quoted in CSV output."""
         from maildir_report.decisions_template import serialize_decisions_csv
 
-        row = {"stable_id": "a" * 64, "filepath": "/mail/foo,bar", "decision": ""}
+        row = _make_full_row(stable_id="a" * 64, filepath="/mail/foo,bar")
         result = serialize_decisions_csv([row])
         reader = csv.DictReader(io.StringIO(result))
         data_rows = list(reader)
@@ -383,8 +676,8 @@ class TestSerializeDecisionsCsv:
         from maildir_report.decisions_template import serialize_decisions_csv
 
         rows = [
-            {"stable_id": f"{'a' * 64}", "filepath": "/mail/first", "decision": ""},
-            {"stable_id": f"{'b' * 64}", "filepath": "/mail/second", "decision": ""},
+            _make_full_row(stable_id="a" * 64, filepath="/mail/first"),
+            _make_full_row(stable_id="b" * 64, filepath="/mail/second"),
         ]
         csv_str = serialize_decisions_csv(rows)
         reader = csv.DictReader(io.StringIO(csv_str))
@@ -393,7 +686,7 @@ class TestSerializeDecisionsCsv:
         assert data_rows[1]["filepath"] == "/mail/second"
 
 
-# ── serialize_decisions_json ──────────────────────────────────────────────────
+# ── serialize_decisions_json ──────────────────────────────────────────────
 
 
 class TestSerializeDecisionsJson:
@@ -455,7 +748,7 @@ class TestSerializeDecisionsJson:
         parsed = json.loads(serialize_decisions_json(rows))
         assert parsed[0]["decision"] == ""
 
-    def test_json_object_keys_are_stable_id_filepath_decision(self):
+    def test_json_object_keys_are_all_14_headers(self):
         from maildir_report.decisions_template import (
             generate_decisions_template,
             serialize_decisions_json,
@@ -463,7 +756,7 @@ class TestSerializeDecisionsJson:
 
         rows = generate_decisions_template([_make_record("/mail/a")])
         parsed = json.loads(serialize_decisions_json(rows))
-        assert set(parsed[0].keys()) == {"stable_id", "filepath", "decision"}
+        assert set(parsed[0].keys()) == set(EXPECTED_HEADERS)
 
     def test_json_deterministic(self):
         from maildir_report.decisions_template import (
@@ -492,8 +785,8 @@ class TestSerializeDecisionsJson:
         from maildir_report.decisions_template import serialize_decisions_json
 
         rows = [
-            {"stable_id": "a" * 64, "filepath": "/mail/first", "decision": ""},
-            {"stable_id": "b" * 64, "filepath": "/mail/second", "decision": ""},
+            _make_full_row(stable_id="a" * 64, filepath="/mail/first"),
+            _make_full_row(stable_id="b" * 64, filepath="/mail/second"),
         ]
         parsed = json.loads(serialize_decisions_json(rows))
         assert parsed[0]["filepath"] == "/mail/first"
