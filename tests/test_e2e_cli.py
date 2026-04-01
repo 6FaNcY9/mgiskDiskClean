@@ -323,7 +323,7 @@ class TestE2eDecisionsTemplate:
         build_pipeline(str(root), str(out), FIXED_TS)
         content = (out / "decisions.csv").read_text(encoding="utf-8")
         reader = csv.DictReader(io.StringIO(content))
-        assert reader.fieldnames == ["stable_id", "filepath", "decision"]
+        assert reader.fieldnames == ["stable_id", "filepath", "decision", "folder", "date", "from", "subject", "total_size_bytes", "attachment_count", "attachment_total_bytes", "attachment_names", "is_duplicate", "dup_group_id", "dup_rank"]
 
     def test_e2e_decisions_row_count_matches_email_count(
         self, tmp_path: pathlib.Path

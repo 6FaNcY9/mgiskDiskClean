@@ -170,6 +170,29 @@ def _build_parser() -> argparse.ArgumentParser:
             "(e.g. '2024-06-15T10:00:00+00:00').  REQUIRED — no wall-clock fallback."
         ),
     )
+    parser.add_argument(
+        "--source",
+        choices=["rsync", "imap"],
+        default="rsync",
+        help=(
+            "Acquisition source for the Maildir.  'rsync' (default) uses the "
+            "MAILDIR positional arg directly.  'imap' fetches from an IMAP server "
+            "using env vars IMAP_SERVER/IMAP_USER/IMAP_PASS and materialises a local "
+            "Maildir under DATA_DIR/imap/<mailbox>/INBOX/Maildir/ before scanning."
+        ),
+    )
+    parser.add_argument(
+        "--imap-mailbox",
+        default=None,
+        metavar="MAILBOX",
+        help="Mailbox name for IMAP ingest (required when --source imap).",
+    )
+    parser.add_argument(
+        "--imap-since",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Fetch IMAP messages on or after this date (optional; --source imap only).",
+    )
     return parser
 
 
@@ -192,9 +215,46 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # Resolve the Maildir path depending on --source
+    if args.source == "imap":
+        # --source imap: positional arg is data_dir; --imap-mailbox is required.
+        if not args.imap_mailbox:
+            print(
+                "ERROR: --imap-mailbox is required when --source imap",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            from maildir_report.imap_ingest import (
+                ImapCredentialError,
+                ImapIngestConfig,
+                run_imap_ingest,
+            )
+        except ImportError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        try:
+            imap_cfg = ImapIngestConfig.from_env(
+                mailbox_name=args.imap_mailbox,
+                data_dir=args.maildir_path,
+                since=args.imap_since,
+            )
+        except ImapCredentialError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        try:
+            maildir_root = run_imap_ingest(config=imap_cfg)
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        # Pipeline scans the materialised Maildir root (contains cur/ inside)
+        maildir_path = str(maildir_root)
+    else:
+        maildir_path = args.maildir_path
+
     try:
         build_pipeline(
-            maildir_path=args.maildir_path,
+            maildir_path=maildir_path,
             output_dir=args.output_dir,
             timestamp_str=args.timestamp,
         )
