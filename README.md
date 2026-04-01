@@ -41,6 +41,75 @@ scan-mailbox <mailbox>
 #   decisions.csv   — editable keep/delete decisions template
 ```
 
+## IMAP Ingestion (optional)
+
+If rsync access is unavailable, you can fetch mailbox messages directly from an IMAP server.
+This produces a local Maildir in the same structure the pipeline expects.
+
+### Prerequisites
+
+1. Install the optional `imap-tools` dependency (already in devenv venv):
+   ```bash
+   pip install imap-tools>=1.6
+   ```
+2. Set credentials as **environment variables** (never CLI args or files):
+   ```bash
+   export IMAP_SERVER=imap.example.com
+   export IMAP_USER=you@example.com
+   export IMAP_PASS=your-app-password   # Use an app password, not your main password
+   ```
+
+### Fetch a mailbox via IMAP
+
+```bash
+# Fetch INBOX of a mailbox (all messages)
+devenv shell -- fetch-imap <mailbox> $DEVENV_ROOT/data
+
+# Fetch only messages since a specific date
+devenv shell -- fetch-imap <mailbox> $DEVENV_ROOT/data --since 2024-01-01
+```
+
+The command is **read-only**: it never moves, deletes, or flags messages on the server.
+
+Output layout:
+```
+data/imap/<mailbox>/INBOX/Maildir/
+  cur/
+    {uidvalidity}.{uid}.eml   ← one file per message, deterministic name
+  new/
+  tmp/
+```
+
+### Run the pipeline on the fetched Maildir
+
+```bash
+# Scan the fetched IMAP Maildir and generate report artifacts
+PYTHONPATH=src python -m maildir_report \
+  data/imap/<mailbox>/INBOX/Maildir \
+  reports/
+```
+
+Or use the `--source imap` shorthand on the main CLI:
+```bash
+IMAP_SERVER=imap.example.com IMAP_USER=you@example.com IMAP_PASS=secret \
+  PYTHONPATH=src python -m maildir_report \
+    data/ reports/ \
+    --source imap --imap-mailbox <mailbox>
+```
+
+### Idempotency
+
+Re-running `fetch-imap` with the same credentials is safe:
+- Each message is saved as `{uidvalidity}.{uid}.eml` — same UID always overwrites the same file.
+- No duplicates are created; the file list is identical across reruns.
+
+### Security notes
+
+- Credentials **must** come from `IMAP_SERVER` / `IMAP_USER` / `IMAP_PASS` env vars.
+- TLS (IMAPS, port 993) is **required** — plain-text connections are rejected.
+- Only INBOX is fetched in v1.
+- No server mutations are ever performed.
+
 ## Commands
 
 | Command                | Description                                               |
