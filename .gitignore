@@ -8,3 +8,9 @@ nginx/nginx.pid
 .devenv/
 .devenv.flake.nix
 devenv.lock
+
+# web app — local secrets (never commit)
+web/config/local.php
+
+# local mailbox data (large; outside webroot)
+data/
