@@ -14,3 +14,6 @@ web/config/local.php
 
 # local mailbox data (large; outside webroot)
 data/
+
+# git worktrees
+.worktrees/
