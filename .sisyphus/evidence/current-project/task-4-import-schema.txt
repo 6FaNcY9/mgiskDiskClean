@@ -1,0 +1,53 @@
+# Task 4 — Schema rejection evidence
+# Generated: 2026-03-26T03:10:17Z
+
+## Environment
+PHP: PHP 8.3.30 (cli) (built: Jan 13 2026 22:36:55) (NTS)
+PHP Server: 127.0.0.1:18011
+
+## Scenario 1: Unknown schema_version rejected (no partial writes)
+
+Setup: Modified manifest with schema_version = "99.0" at:
+  data/mailboxes/testbox_bad_schema_593355/reports/maildir.manifest.json
+Schema version in file: 99.0
+
+Command:
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d '{"mailbox":"testbox_bad_schema_593355"}' http://127.0.0.1:18011/admin/import
+
+HTTP Status: 400
+Response body: {"error":"Unknown manifest schema_version: \"99.0\". Only \"1.0\" is supported."}
+
+Expected: HTTP 400, error message naming schema_version
+PASS: HTTP 400
+
+DB state (before/after must be equal):
+  reports before: 1 | after: 1 | bad_mailbox_in_db: 0
+  emails  before: 2 | after: 2
+
+PASS: No partial writes (report_count unchanged=1, email_count unchanged=2)
+PASS: No report row created for bad-schema mailbox (count=0)
+
+## Scenario 2: Path traversal in mailbox name rejected
+
+Command:
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d '{"mailbox":"../../../etc/passwd"}' http://127.0.0.1:18011/admin/import
+
+HTTP Status: 400
+Response body: {"error":"Invalid mailbox name: only alphanumeric, dot, hyphen, and underscore allowed."}
+
+Expected: HTTP 400, allowlist rejection
+PASS: HTTP 400
+
+## Scenario 3: Null pdf_sha256 (no report_id) rejected
+
+Command:
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d '{"mailbox":"testbox_null_sha_593355"}' http://127.0.0.1:18011/admin/import
+
+HTTP Status: 400
+Response body: {"error":"Manifest pdf_sha256 is null or missing; cannot derive report_id."}
+
+Expected: HTTP 400, pdf_sha256 error
+PASS: HTTP 400

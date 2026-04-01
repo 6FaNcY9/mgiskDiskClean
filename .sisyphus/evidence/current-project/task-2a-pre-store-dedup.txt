@@ -1,0 +1,157 @@
+Task 2a — Pre-Store Dedup Evidence
+====================================
+Date: 2026-03-26
+Task: 2a. Local pre-store dedup (automatic after mailbox stored)
+
+FILES CREATED
+-------------
+  src/maildir_report/pre_store_dedup.py   (479 lines) — module + CLI
+  tests/test_pre_store_dedup.py           (657 lines) — 29 tests
+
+NO OTHER FILES MODIFIED.
+
+──────────────────────────────────────────────────────────────────────────────
+SCENARIO 1 — CLI --help exits 0
+──────────────────────────────────────────────────────────────────────────────
+
+COMMAND:
+  PYTHONPATH=src python -m maildir_report.pre_store_dedup --help
+
+OUTPUT:
+  usage: maildir-pre-store-dedup [-h] --maildir-root PATH --quarantine-root PATH
+                                 [--dry-run]
+
+  Local pre-store email dedup for maildir_report.
+
+  Scans a local stored Maildir directory for email files with
+  identical raw content (SHA-256), then quarantines non-canonical
+  copies into a quarantine directory.
+
+  Default behaviour is QUARANTINE-ONLY (non-destructive):
+    - The canonical copy (oldest by mtime, filepath tiebreaker)
+      is kept in place.
+    - Duplicates are MOVED (not deleted) to <quarantine-root>/.
+    - An audit.log is appended in <quarantine-root>/.
+
+  Scope guardrail: only the local --maildir-root path is touched.
+  The remote server mailbox is NEVER accessed by this command.
+
+  options:
+    -h, --help            show this help message and exit
+    --maildir-root PATH   Path to the local stored Maildir root directory (e.g.
+                          $DEVENV_ROOT/data/mailboxes/<mailbox>/maildir/.maildir
+                          ). Must contain cur/ and/or new/ sub-directories.
+    --quarantine-root PATH
+                          Directory where duplicate files are moved. Created if
+                          it does not exist. An audit.log is appended here with
+                          every run.
+    --dry-run             Scan and report what would be quarantined, but do not
+                          move any files. The audit.log is still written with
+                          DRY-RUN markers.
+
+EXIT: 0
+
+RESULT: PASS
+
+──────────────────────────────────────────────────────────────────────────────
+SCENARIO 2 — Determinism: same fixture twice → identical outputs
+──────────────────────────────────────────────────────────────────────────────
+
+FIXTURE:
+  oldest.eml  — content="identical email content for determinism test"  mtime=1_000_000
+  middle.eml  — content="identical email content for determinism test"  mtime=2_000_000
+  unique.eml  — content="unique email content..."                        mtime=3_000_000
+
+RUN 1:
+  content_hash      : 3cf68878e8a9d0c191bb0f66e462f1e8db469abbd37f740d1e326c99eca8cbae
+  candidate_set_hash: a9bd483a3baf428f8f0e609faa8c4c2a2e7187525b7d0d4e632451091a0ba8cd
+  canonical_path    : oldest.eml
+  duplicate_paths   : ['middle.eml']
+
+RUN 2 (same fixture, no file state changes):
+  content_hash      : 3cf68878e8a9d0c191bb0f66e462f1e8db469abbd37f740d1e326c99eca8cbae
+  candidate_set_hash: a9bd483a3baf428f8f0e609faa8c4c2a2e7187525b7d0d4e632451091a0ba8cd
+  canonical_path    : oldest.eml
+  duplicate_paths   : ['middle.eml']
+
+DETERMINISM CHECK: PASS — candidate_set_hash and canonical identical across both runs
+CANONICAL CHECK   : PASS — canonical is oldest.eml (mtime=1_000_000)
+
+RESULT: PASS
+
+──────────────────────────────────────────────────────────────────────────────
+SCENARIO 3 — Targeted test suite (29 tests)
+──────────────────────────────────────────────────────────────────────────────
+
+COMMAND:
+  PYTHONPATH=src python -m pytest tests/test_pre_store_dedup.py -v --tb=short
+
+OUTPUT:
+  ============================= test session starts ==============================
+  platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+  collected 29 items
+
+  tests/test_pre_store_dedup.py::TestNonDestructiveDefault::test_duplicate_moved_to_quarantine PASSED
+  tests/test_pre_store_dedup.py::TestNonDestructiveDefault::test_duplicate_not_present_in_maildir_after_quarantine PASSED
+  tests/test_pre_store_dedup.py::TestNonDestructiveDefault::test_canonical_file_remains_in_maildir PASSED
+  tests/test_pre_store_dedup.py::TestNonDestructiveDefault::test_no_original_file_deleted PASSED
+  tests/test_pre_store_dedup.py::TestDeterministicOrdering::test_canonical_is_oldest_by_mtime PASSED
+  tests/test_pre_store_dedup.py::TestDeterministicOrdering::test_filepath_tiebreaker_when_same_mtime PASSED
+  tests/test_pre_store_dedup.py::TestDeterministicOrdering::test_same_fixture_same_canonical PASSED
+  tests/test_pre_store_dedup.py::TestStableCandidateSetHash::test_hash_is_64_char_hex PASSED
+  tests/test_pre_store_dedup.py::TestStableCandidateSetHash::test_hash_identical_across_two_scans PASSED
+  tests/test_pre_store_dedup.py::TestStableCandidateSetHash::test_candidate_set_hash_helper_deterministic PASSED
+  tests/test_pre_store_dedup.py::TestStableCandidateSetHash::test_candidate_set_hash_order_independent PASSED
+  tests/test_pre_store_dedup.py::TestNoDuplicates::test_no_groups_when_all_unique PASSED
+  tests/test_pre_store_dedup.py::TestNoDuplicates::test_result_has_empty_quarantined_list PASSED
+  tests/test_pre_store_dedup.py::TestNoDuplicates::test_no_quarantine_dir_created_when_no_dups PASSED
+  tests/test_pre_store_dedup.py::TestAuditLog::test_audit_log_created PASSED
+  tests/test_pre_store_dedup.py::TestAuditLog::test_audit_log_contains_candidate_set_hash PASSED
+  tests/test_pre_store_dedup.py::TestAuditLog::test_audit_log_contains_canonical_path PASSED
+  tests/test_pre_store_dedup.py::TestAuditLog::test_audit_log_appended_not_overwritten PASSED
+  tests/test_pre_store_dedup.py::TestDryRun::test_dry_run_no_files_moved PASSED
+  tests/test_pre_store_dedup.py::TestDryRun::test_dry_run_audit_log_written_with_dry_run_marker PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_help_exits_zero PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_help_shows_quarantine_description PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_main_no_duplicates_exits_zero PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_main_with_duplicates_exits_zero PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_main_missing_required_args_exits_nonzero PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_main_invalid_maildir_exits_one PASSED
+  tests/test_pre_store_dedup.py::TestCLI::test_dry_run_flag_accepted PASSED
+  tests/test_pre_store_dedup.py::TestMultiGroupScenario::test_two_groups_each_handled PASSED
+  tests/test_pre_store_dedup.py::TestMultiGroupScenario::test_two_groups_total_quarantine_count PASSED
+
+  29 passed in 0.17s
+
+RESULT: PASS — 29/29
+
+──────────────────────────────────────────────────────────────────────────────
+SCENARIO 4 — Full test suite regression check
+──────────────────────────────────────────────────────────────────────────────
+
+COMMAND:
+  PYTHONPATH=src python -m pytest --tb=short -q
+
+OUTPUT:
+  432 passed in 1.40s
+
+RESULT: PASS — 432/432 (no regressions introduced)
+
+──────────────────────────────────────────────────────────────────────────────
+SUMMARY
+──────────────────────────────────────────────────────────────────────────────
+
+  [PASS] CLI --help exits 0
+  [PASS] Determinism: same fixture → same candidate_set_hash both runs
+  [PASS] Determinism: same fixture → same canonical_path both runs
+  [PASS] 29 targeted tests (non-destructive, ordering, hash, audit, dry-run, CLI)
+  [PASS] 432 total tests (no regressions)
+
+IMPLEMENTATION NOTES:
+  - Duplicate criterion: SHA-256 of raw email file bytes (NOT attachment content)
+  - Canonical selection: sort by (mtime UTC string, filepath) — oldest = canonical
+  - candidate_set_hash: SHA-256 of newline-joined sorted absolute filepaths
+  - Quarantine layout: <quarantine_root>/<csh[:8]>/<filename>
+  - Audit log: appended at <quarantine_root>/audit.log (never overwritten)
+  - Scope guardrail: only --maildir-root path is ever modified
+  - store-mailbox hook: already wired in devenv.nix; module now importable

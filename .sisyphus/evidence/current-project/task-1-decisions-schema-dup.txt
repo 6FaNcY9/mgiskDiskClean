@@ -1,0 +1,35 @@
+=== Task 1: decisions.csv schema — Scenario: Duplicate email rows show dup fields ===
+Date: 2026-03-26T01:03:59Z
+
+--- Command ---
+PYTHONPATH=src python -m pytest tests/test_e2e_cli.py -v -k dup 2>&1
+
+--- Dup E2E Test Results ---
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0 -- /home/vino/Documents/Projekts/mrijaPageClean/.devenv/state/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+collecting ... collected 32 items / 30 deselected / 2 selected
+
+tests/test_e2e_cli.py::TestE2eDuplicateGroups::test_e2e_duplicate_emails_show_dup_group_in_manifest PASSED [ 50%]
+tests/test_e2e_cli.py::TestE2eDuplicateGroups::test_e2e_no_duplicates_when_unique_content PASSED [100%]
+
+======================= 2 passed, 30 deselected in 0.12s =======================
+
+--- Manual Dup Scenario ---
+dup_groups count: 1 (expected 1)
+dup rows: 2 (expected 2)
+unique rows: 1 (expected 1)
+  is_duplicate=true  dup_rank=0  dup_group_id=feab75b7...
+  is_duplicate=true  dup_rank=1  dup_group_id=feab75b7...
+  is_duplicate=false  dup_rank=''  dup_group_id=''
+
+ALL DUP ASSERTIONS PASSED
+
+--- Full Test Suite Pass ---
+........................................................................ [ 74%]
+.........................                                                [100%]
+97 passed in 0.49s
+
+--- RESULT: PASS ---

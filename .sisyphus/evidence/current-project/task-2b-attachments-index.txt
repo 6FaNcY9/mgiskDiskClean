@@ -1,0 +1,126 @@
+Task 2b: Extract attachments to disk + build local index DB
+===========================================================
+Date: 2026-03-26
+
+## Acceptance Commands
+
+### PASS: extract_attachments --help exits 0
+$ PYTHONPATH=src python -m maildir_report.extract_attachments --help
+usage: maildir-extract-attachments [-h] --maildir-root PATH --output-root PATH
+                                   [--quiet]
+
+Extract MIME attachments from a Maildir to a flat output directory.
+
+Files are written as <sha256>_<size>.<ext> — collision-safe and idempotent.
+Running the same extraction twice yields no duplicate files.
+
+options:
+  -h, --help           show this help message and exit
+  --maildir-root PATH  Path to the Maildir root directory (must contain cur/
+                       or new/).
+  --output-root PATH   Directory to write extracted attachment files into
+                       (created if absent).
+  --quiet              Suppress progress output.
+
+EXIT CODE: 0  ✓
+
+### PASS: index_mailbox --help exits 0
+$ PYTHONPATH=src python -m maildir_report.index_mailbox --help
+usage: maildir-index-mailbox [-h] --mailbox NAME --data-root PATH
+                             [--global-index PATH] [--quiet]
+
+Build (or rebuild) the SQLite index for a stored mailbox.
+
+Reads from <data-root>/maildir/.maildir/ and writes to
+<data-root>/index.sqlite.
+
+Idempotent: running multiple times yields identical row counts.
+
+options:
+  -h, --help           show this help message and exit
+  --mailbox NAME       Mailbox name (stored in every email row; e.g.
+                       gabriel.hangel).
+  --data-root PATH     Mailbox data directory. Must contain maildir/.maildir/.
+                       index.sqlite will be created here.
+  --global-index PATH  Optional path for a global SQLite index populated in
+                       addition to the per-mailbox index (e.g.
+                       $DEVENV_ROOT/data/index/mail_index.sqlite).
+  --quiet              Suppress progress output.
+
+EXIT CODE: 0  ✓
+
+## Extraction Behavior Verification
+
+Scenario: 3 emails — email1 + email2 share same PDF, email3 has unique DOCX
+
+### PASS: Extraction run 1
+EXTRACT_RUN1: written=2 skipped=1 total=3
+  → Wrote 2 unique files (pdf + docx), skipped 1 duplicate (same SHA-256)
+
+### PASS: Extraction run 2 (idempotence)
+EXTRACT_RUN2: written=0 skipped=3 total=3
+  → Wrote 0 new files; all 3 parts were already present
+
+### PASS: Files on disk (exactly 2)
+FILES_ON_DISK: [
+  '2bfe7cb041ea751ac802c2ae80beaba4e2eefbe9bdedff4cfaa42b371a8dc4f9_28.docx',
+  'ca51f6e6685f1132f50204555762662d103dea15aac47e047d5c2e0e8275abe3_28.pdf'
+]
+
+### PASS: Naming format = <sha256>_<size>.<ext>
+  PDF_EXPECTED:  ca51f6e6685f1132f50204555762662d103dea15aac47e047d5c2e0e8275abe3_28.pdf
+  DOCX_EXPECTED: 2bfe7cb041ea751ac802c2ae80beaba4e2eefbe9bdedff4cfaa42b371a8dc4f9_28.docx
+  Both files present on disk ✓
+
+## Index DB Verification
+
+### PASS: Index run 1
+INDEX_RUN1: emails=3 attachments=3
+
+### PASS: Index run 2 (idempotence)
+INDEX_RUN2: emails=3 attachments=3
+
+### PASS: DB row counts stable
+DB_EMAILS=3 (one per email)
+DB_ATTACHMENTS=3 (one per email-attachment link, two links for shared quarterly_report.pdf)
+
+### PASS: Schema columns
+EMAILS_COLS: ['mailbox', 'stable_id', 'filepath', 'folder', 'date', 'from_addr', 'subject', 'total_size_bytes']
+ATTACHMENTS_COLS: ['sha256', 'size', 'mime', 'original_filename', 'stored_path', 'email_stable_id']
+
+All required minimum fields present ✓
+
+## Test Suite
+
+479 tests passed (47 new Task 2b tests + 432 pre-existing)
+0 failures, 0 regressions
+
+Test file: tests/test_task2b_attachments_index.py (47 tests)
+Coverage:
+  - Extraction naming (sha256_size.ext format)
+  - Idempotence (second run writes 0 files)
+  - Same-content dedup (2 emails → 1 file on disk)
+  - Zero-byte and inline parts not written
+  - Path traversal safety
+  - _safe_extension helper
+  - _stored_filename helper
+  - CLI --help exits 0
+  - Index schema (tables + columns)
+  - Index content (min fields populated)
+  - Index idempotence
+  - Global index
+  - Email-attachment linkage (email_stable_id FK)
+  - Filename search (LIKE query)
+  - index_mailbox CLI
+  - FileNotFoundError on missing maildir
+
+## Files Created
+
+  src/maildir_report/extract_attachments.py  (345 lines)
+  src/maildir_report/index_mailbox.py        (444 lines)
+  tests/test_task2b_attachments_index.py     (876 lines, 47 tests)
+
+## No devenv.nix Changes Required
+
+devenv.nix already contained index-mailbox and index-all scripts (wired in Task 2
+skeleton). Both call `python3 -m maildir_report.index_mailbox` — now satisfied.

@@ -1,0 +1,27 @@
+==================================================================
+Task 6 UI QA -- 2026-03-26T04:09:21Z
+==================================================================
+==> Starting PHP server on http://127.0.0.1:18130 ...
+--- 1. Admin Login ---
+  Logged in as admin.
+--- 2. Admin Routes ---
+  GET /reports: 200 (expected 200)
+  GET /admin/overview: 200 (expected 200)
+  Found report_id: c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c
+--- 3. Coworker Login ---
+  Logged in as coworker.
+--- 4. Coworker Routes ---
+  GET /reports: 200 (expected 200)
+  GET /review?report_id=c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c: 200 (expected 200)
+  GET /admin/overview (coworker): 403 (expected 403)
+--- 5. i18n Toggle ---
+  DE: found 'Willkommen' -> PASS
+  UK: found 'Ласкаво просимо' -> PASS
+--- 6. Review Update (CSRF Header) ---
+  Testing update on stable_id: 8d5c836b2e784f613bfd32d8531a041d957aad61baaae07e95056aa8bdb6a29c
+  POST without header: 403 (expected 403)
+  POST with header: SUCCESS -> PASS
+--- 7. UI Elements Check ---
+  Bulk Actions UI found -> PASS
+  Attachment Metadata placeholder found -> PASS
+==> Server stopped.

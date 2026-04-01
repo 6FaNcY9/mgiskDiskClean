@@ -1,0 +1,101 @@
+=== Task 1: decisions.csv schema — Scenario: Enriched columns check ===
+Date: 2026-03-26T01:03:42Z
+
+--- Command ---
+PYTHONPATH=src python -m pytest tests/test_decisions_template.py -v 2>&1
+
+--- Test Results ---
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0 -- /home/vino/Documents/Projekts/mrijaPageClean/.devenv/state/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+collecting ... collected 65 items
+
+tests/test_decisions_template.py::TestDecisionsTemplateImports::test_generate_decisions_template_importable PASSED [  1%]
+tests/test_decisions_template.py::TestDecisionsTemplateImports::test_serialize_decisions_csv_importable PASSED [  3%]
+tests/test_decisions_template.py::TestDecisionsTemplateImports::test_serialize_decisions_json_importable PASSED [  4%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_empty_input_returns_empty_list PASSED [  6%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_row_count_matches_record_count PASSED [  7%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_no_duplicate_rows PASSED [  9%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_row_has_required_keys PASSED [ 10%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_row_has_no_extra_keys PASSED [ 12%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_row_keys_in_canonical_order PASSED [ 13%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_stable_id_matches_record PASSED [ 15%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_stable_id_verbatim_from_record_field PASSED [ 16%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_filepath_matches_record PASSED [ 18%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_decision_is_empty_string PASSED [ 20%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplate::test_decision_is_empty_for_all_rows PASSED [ 21%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_folder_copied_from_record PASSED [ 23%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_date_copied_from_record PASSED [ 24%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_from_copied_from_sender PASSED [ 26%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_subject_copied_from_record PASSED [ 27%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_total_size_bytes_is_string_of_total_size PASSED [ 29%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_count_zero_when_no_parts PASSED [ 30%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_count_matches_parts_length PASSED [ 32%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_total_bytes_zero_when_no_parts PASSED [ 33%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_total_bytes_sums_part_sizes PASSED [ 35%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_names_empty_when_no_parts PASSED [ 36%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_names_semicolon_separated PASSED [ 38%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_attachment_names_single_file PASSED [ 40%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_is_duplicate_false_when_no_dup_group PASSED [ 41%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_is_duplicate_true_when_dup_group_set PASSED [ 43%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_dup_group_id_empty_when_not_duplicate PASSED [ 44%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_dup_group_id_set_when_duplicate PASSED [ 46%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_dup_rank_empty_when_not_duplicate PASSED [ 47%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_dup_rank_integer_string_when_set PASSED [ 49%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_dup_rank_zero_is_string_zero PASSED [ 50%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_subject_short_not_truncated PASSED [ 52%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_subject_exactly_80_chars_not_truncated PASSED [ 53%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_subject_81_chars_gets_ellipsis PASSED [ 55%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateContextFields::test_subject_very_long_truncated_to_80_plus_ellipsis PASSED [ 56%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateOrdering::test_ordering_matches_sort_emails PASSED [ 58%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateOrdering::test_ordering_stable_by_date_then_filepath PASSED [ 60%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateOrdering::test_input_list_not_mutated PASSED [ 61%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateOrdering::test_ordering_independent_of_input_order PASSED [ 63%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateDeterminism::test_two_calls_produce_equal_results PASSED [ 64%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateDeterminism::test_result_is_json_serialisable PASSED [ 66%]
+tests/test_decisions_template.py::TestGenerateDecisionsTemplateDeterminism::test_all_values_are_strings PASSED [ 67%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_returns_string PASSED [ 69%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_empty_input_has_header_only PASSED [ 70%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_header_row PASSED [ 72%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_row_count_matches_input PASSED [ 73%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_stable_id_preserved PASSED [ 75%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_filepath_preserved PASSED [ 76%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_decision_is_empty_in_output PASSED [ 78%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_context_fields_preserved PASSED [ 80%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_deterministic PASSED [ 81%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_special_chars_in_filepath_escaped PASSED [ 83%]
+tests/test_decisions_template.py::TestSerializeDecisionsCsv::test_csv_row_order_preserved PASSED [ 84%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_returns_string PASSED [ 86%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_empty_input_is_empty_array PASSED [ 87%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_row_count_matches_input PASSED [ 89%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_stable_id_preserved PASSED [ 90%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_filepath_preserved PASSED [ 92%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_decision_is_empty_string PASSED [ 93%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_object_keys_are_all_14_headers PASSED [ 95%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_deterministic PASSED [ 96%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_roundtrip_equal_to_rows PASSED [ 98%]
+tests/test_decisions_template.py::TestSerializeDecisionsJson::test_json_row_order_preserved PASSED [100%]
+
+============================== 65 passed in 0.49s ==============================
+
+--- CSV Header Check ---
+Header: ['stable_id', 'filepath', 'decision', 'folder', 'date', 'from', 'subject', 'total_size_bytes', 'attachment_count', 'attachment_total_bytes', 'attachment_names', 'is_duplicate', 'dup_group_id', 'dup_rank']
+Column count: 14
+Header matches _HEADERS: True
+decision field: ''
+is_duplicate field: false
+dup_group_id field: ''
+dup_rank field: ''
+
+--- Subject Truncation Check ---
+Input len= 20 -> Output len= 20, ends_ellipsis=False, repr='EEEEEEEEEEEEEEEEEEEE'
+Input len= 80 -> Output len= 80, ends_ellipsis=False, repr='LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL'
+Input len= 81 -> Output len= 81, ends_ellipsis=True, repr='LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…'
+Input len=200 -> Output len= 81, ends_ellipsis=True, repr='LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL…'
+
+_SUBJECT_MAX = 80
+Subject assertions: passed
+
+--- RESULT: PASS ---

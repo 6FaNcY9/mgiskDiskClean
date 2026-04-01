@@ -690,7 +690,7 @@ Wave 4: export + local cleanup tool + deployment hardening + end-to-end QA on re
 
   **Commit**: YES | Message: `docs(deploy): ftp hardening and workflow` | Files: `README.md`, `web/public/.htaccess`, `web/src/**`
 
-- [ ] 11. (Optional) IMAP ingestion via `imap-tools` (replace rsync Maildir fetch)
+- [x] 11. (Optional) IMAP ingestion via `imap-tools` (replace rsync Maildir fetch)
 
   **Why/when**:
   - Use this only if rsync access is unavailable or you want to pull mailboxes from providers that only expose IMAP.
@@ -750,7 +750,7 @@ Wave 4: export + local cleanup tool + deployment hardening + end-to-end QA on re
 
   **Commit**: YES | Message: `feat(ingest): add optional imap source` | Files: `src/maildir_report/**`, `devenv.nix`, `README.md`
 
-- [ ] 12. Local Python CLI tool: apply reviewed decisions file (delete/quarantine local emails)
+- [x] 12. Local Python CLI tool: apply reviewed decisions file (delete/quarantine local emails)
 
   **What to do**:
   - Add a standalone Python CLI tool that operates on your **local** Maildir copy (rsync/IMAP materialized) and applies the admin-exported reviewed decisions file.

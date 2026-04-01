@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0 -- /home/vino/Documents/Projekts/mrijaPageClean/.devenv/state/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/vino/Documents/Projekts/mrijaPageClean
+configfile: pyproject.toml
+collecting ... collected 23 items
+
+tests/test_imap_ingest.py::TestFilenameScheme::test_cur_file_named_uidvalidity_uid PASSED [  4%]
+tests/test_imap_ingest.py::TestFilenameScheme::test_cur_dir_structure_created PASSED [  8%]
+tests/test_imap_ingest.py::TestFilenameScheme::test_file_contains_rfc822_bytes PASSED [ 13%]
+tests/test_imap_ingest.py::TestIdempotency::test_second_run_no_new_files PASSED [ 17%]
+tests/test_imap_ingest.py::TestIdempotency::test_file_list_stable_across_reruns PASSED [ 21%]
+tests/test_imap_ingest.py::TestIdempotency::test_uidvalidity_change_new_files_coexist PASSED [ 26%]
+tests/test_imap_ingest.py::TestReadOnly::test_no_flag_changes_on_messages PASSED [ 30%]
+tests/test_imap_ingest.py::TestCredentials::test_missing_imap_server_raises PASSED [ 34%]
+tests/test_imap_ingest.py::TestCredentials::test_missing_imap_user_raises PASSED [ 39%]
+tests/test_imap_ingest.py::TestCredentials::test_missing_imap_pass_raises PASSED [ 43%]
+tests/test_imap_ingest.py::TestCredentials::test_all_env_vars_present_no_error PASSED [ 47%]
+tests/test_imap_ingest.py::TestTlsRequirement::test_config_default_uses_tls PASSED [ 52%]
+tests/test_imap_ingest.py::TestTlsRequirement::test_config_ssl_false_raises PASSED [ 56%]
+tests/test_imap_ingest.py::TestInboxDefault::test_materialized_path_includes_inbox PASSED [ 60%]
+tests/test_imap_ingest.py::TestInboxDefault::test_config_default_folder_inbox PASSED [ 65%]
+tests/test_imap_ingest.py::TestCli::test_help_exits_0 PASSED             [ 69%]
+tests/test_imap_ingest.py::TestCli::test_missing_mailbox_arg_exits_nonzero PASSED [ 73%]
+tests/test_imap_ingest.py::TestSourceIntegration::test_main_help_shows_source_option PASSED [ 78%]
+tests/test_imap_ingest.py::TestSourceIntegration::test_main_source_rsync_default_unchanged PASSED [ 82%]
+tests/test_imap_ingest.py::TestSinceFilter::test_since_stored_in_config PASSED [ 86%]
+tests/test_imap_ingest.py::TestSinceFilter::test_since_none_by_default PASSED [ 91%]
+tests/test_imap_ingest.py::TestImapMessage::test_imap_message_attrs PASSED [ 95%]
+tests/test_imap_ingest.py::TestImapMessage::test_imap_message_uid_is_int PASSED [100%]
+
+============================== 23 passed in 0.47s ==============================
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 41%]
+........................................................................ [ 55%]
+........................................................................ [ 69%]
+........................................................................ [ 83%]
+........................................................................ [ 97%]
+..............                                                           [100%]
+518 passed in 3.20s

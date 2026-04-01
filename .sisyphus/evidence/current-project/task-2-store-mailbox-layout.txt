@@ -1,0 +1,50 @@
+TASK 2 — QA Scenario: store-mailbox creates correct folder layout
+===================================================================
+Date: Thu Mar 26 01:21 UTC 2026
+
+=== QA SCENARIO: store-mailbox creates correct folder layout ===
+Command: store-mailbox testbox --src /tmp/qa_mailbox_fixture/.maildir/
+
+Fixture source:
+  /tmp/qa_mailbox_fixture/.maildir/cur/1000000000.msg001.hostname:2,S
+  /tmp/qa_mailbox_fixture/.maildir/cur/1000000001.msg002.hostname:2,
+
+=== Execution output ===
+==> [store-mailbox] rsync '/tmp/qa_mailbox_fixture/.maildir/' -> '.../data/mailboxes/testbox/maildir/.maildir'
+(rsync transferred 2 message files)
+==> [store-mailbox] Running pre-store dedup on local copy...
+  (pre-store dedup module not yet available; skipping — Task 2a)
+==> [store-mailbox] Generating pipeline outputs...
+==> Done.
+  maildir   : .../data/mailboxes/testbox/maildir/.maildir
+  reports   : .../data/mailboxes/testbox/reports
+  attachments: .../data/mailboxes/testbox/attachments
+
+=== Directory layout after store-mailbox ===
+data/mailboxes/testbox
+data/mailboxes/testbox/attachments
+data/mailboxes/testbox/maildir
+data/mailboxes/testbox/maildir/.maildir
+data/mailboxes/testbox/maildir/.maildir/cur
+data/mailboxes/testbox/maildir/.maildir/new
+data/mailboxes/testbox/maildir/.maildir/tmp
+data/mailboxes/testbox/reports
+data/mailboxes/testbox/reports/maildir.decisions.csv
+data/mailboxes/testbox/reports/maildir.manifest.json
+data/mailboxes/testbox/reports/maildir.pdf
+
+=== Required subdirectory checks ===
+  [OK] data/mailboxes/testbox/maildir/.maildir   (rsync target)
+  [OK] data/mailboxes/testbox/reports            (pipeline outputs)
+  [OK] data/mailboxes/testbox/attachments        (extracted attachments — Task 2b)
+
+=== Pipeline outputs in reports/ ===
+  maildir.decisions.csv    681 bytes
+  maildir.manifest.json    476 bytes
+  maildir.pdf             2312 bytes
+
+Expected:
+  - maildir/, reports/, attachments/ directories: ALL EXIST
+  - pipeline outputs written under reports/: YES
+
+SCENARIO RESULT: PASS

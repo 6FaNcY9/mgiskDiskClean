@@ -1,0 +1,43 @@
+Task 11 — IMAP ingest test fix (2026-03-28)
+==========================================
+
+Problem
+-------
+After Task 11 was committed, `test_imap_ingest.py::TestSourceIntegration::test_main_source_rsync_default_unchanged`
+was failing with:
+
+  FAILED tests/test_imap_ingest.py::TestSourceIntegration::test_main_source_rsync_default_unchanged
+  E   argparse.ArgumentError: the following arguments are required: --timestamp
+
+Root cause: the test called `_build_parser().parse_args(["/some/maildir", str(tmp_path)])` without
+the now-required `--timestamp` argument.  The `--timestamp` flag was made required (no fallback)
+as part of the determinism design, but this test was written before that requirement was enforced.
+
+Fix
+---
+File: tests/test_imap_ingest.py  line 383
+
+Before:
+    args = parser.parse_args(["/some/maildir", str(tmp_path)])
+
+After:
+    args = parser.parse_args(["--timestamp", "2024-01-01T00:00:00", "/some/maildir", str(tmp_path)])
+
+Verification
+------------
+$ PYTHONPATH=src python -m pytest tests/test_imap_ingest.py -q
+23 passed in 0.39s
+
+$ PYTHONPATH=src python -m pytest -q
+518 passed in 3.13s
+
+cli.py audit (confirming no regressions):
+- required=True on --timestamp: CONFIRMED (line 166)
+- No datetime.now() fallback: CONFIRMED (not present in file)
+- Fixed output filenames report.pdf / manifest.json / decisions.csv: CONFIRMED (lines 61-63)
+- No dead code: CONFIRMED (clean 265-line file)
+
+test_e2e_cli.py audit:
+- _make_maildir present: CONFIRMED (line 126)
+- report.pdf / manifest.json / decisions.csv assertions: CONFIRMED (lines 573-575)
+- test_e2e_main_missing_timestamp_exits_nonzero: CONFIRMED (line 554)
