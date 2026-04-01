@@ -78,6 +78,11 @@ from maildir_report.ordering import sort_dup_groups, sort_emails
 from maildir_report.pdf_determinism import configure_deterministic_pdf
 from maildir_report.runtime import format_report_timestamp, parse_report_timestamp
 
+# ── HTML-escape helper (Paragraph parses XML internally) ─────────────────────
+
+def _esc(text: str) -> str:
+    """Escape & < > so ReportLab's Paragraph XML parser doesn't choke on them."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 # ── Page layout constants ─────────────────────────────────────────────────────
 
 _LEFT_MARGIN = 20 * mm
@@ -239,11 +244,11 @@ def _build_email_liste(
     """Build the E-Mail-Liste section flowables (heading + table)."""
     # Column widths (must sum to usable_width)
     col_widths = [
-        usable_width * 0.36,  # Betreff (subject)
-        usable_width * 0.22,  # Von (sender)
-        usable_width * 0.17,  # Datum (date)
-        usable_width * 0.12,  # Anhänge (attachment count)
-        usable_width * 0.13,  # Duplikate (dup flag)
+        usable_width * 0.35,  # Betreff (subject)
+        usable_width * 0.25,  # Von (sender)
+        usable_width * 0.16,  # Datum (date)
+        usable_width * 0.10,  # Anhänge (attachment count)
+        usable_width * 0.14,  # Duplikate (dup flag)
     ]
 
     # Header row — German labels
@@ -252,7 +257,26 @@ def _build_email_liste(
 
     sorted_records = sort_emails(records)
 
-    data: list[list[str]] = [header]
+    # Build a ParagraphStyle for cell text so words wrap within columns
+    cell_style = ParagraphStyle(
+        "CellNormal",
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+        wordWrap="CJK",
+        parent=getSampleStyleSheet()["Normal"],
+    )
+    cell_bold = ParagraphStyle(
+        "CellBold",
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=11,
+        wordWrap="CJK",
+        parent=getSampleStyleSheet()["Normal"],
+    )
+
+    header_row = [Paragraph(h, cell_bold) for h in header]
+    data: list[list[Any]] = [header_row]
     for rec in sorted_records:
         subject = rec.get("subject", "") or ""
         sender = rec.get("sender", "") or ""
@@ -266,19 +290,19 @@ def _build_email_liste(
         dup_group_id = rec.get("dup_group_id")
         dup_marker = "Ja" if dup_group_id else "Nein"
 
-        # Truncate long values to prevent table overflow
-        subject_display = subject[:50] + "\u2026" if len(subject) > 50 else subject
-        sender_display = sender[:30] + "\u2026" if len(sender) > 30 else sender
+        # Truncate subject/sender at generous limits — Paragraph wraps the rest
+        subject_display = _esc(subject[:80] + "\u2026" if len(subject) > 80 else subject)
+        sender_display = _esc(sender[:50] + "\u2026" if len(sender) > 50 else sender)
         # date is "YYYY-MM-DD HH:MM" — show only date portion
-        date_display = date[:10] if len(date) >= 10 else date
+        date_display = _esc(date[:10] if len(date) >= 10 else date)
 
         data.append(
             [
-                subject_display,
-                sender_display,
-                date_display,
-                str(attachment_count),
-                dup_marker,
+                Paragraph(subject_display, cell_style),
+                Paragraph(sender_display, cell_style),
+                Paragraph(date_display, cell_style),
+                Paragraph(str(attachment_count), cell_style),
+                Paragraph(dup_marker, cell_style),
             ]
         )
 
@@ -321,7 +345,24 @@ def _build_duplikate_gruppen(
         usable_width * 0.20,  # Datum (date)
     ]
 
-    member_header = ["Betreff", "Von", "Datum"]
+    # ParagraphStyle for dup member table cells
+    dup_cell = ParagraphStyle(
+        "DupCell",
+        fontName="Helvetica",
+        fontSize=7,
+        leading=9,
+        wordWrap="CJK",
+        parent=getSampleStyleSheet()["Normal"],
+    )
+    dup_cell_bold = ParagraphStyle(
+        "DupCellBold",
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+        wordWrap="CJK",
+        parent=getSampleStyleSheet()["Normal"],
+    )
+    member_header_row = [Paragraph(h, dup_cell_bold) for h in ["Betreff", "Von", "Datum"]]
 
     flowables: list[Any] = [
         Paragraph("Duplikatgruppen", styles["heading1"]),
@@ -347,18 +388,21 @@ def _build_duplikate_gruppen(
         ]
         sorted_members = sort_emails(member_records)
 
-        data: list[list[str]] = [member_header]
+        data: list[list[Any]] = [member_header_row]
         for member in sorted_members:
             subject = member.get("subject", "") or ""
             sender = member.get("sender", "") or ""
             date = member.get("date", "") or ""
 
-            # Truncate long values to prevent table overflow
-            subject_display = subject[:46] + "\u2026" if len(subject) > 46 else subject
-            sender_display = sender[:28] + "\u2026" if len(sender) > 28 else sender
-            date_display = date[:10] if len(date) >= 10 else date
+            subject_display = _esc(subject[:80] + "\u2026" if len(subject) > 80 else subject)
+            sender_display = _esc(sender[:50] + "\u2026" if len(sender) > 50 else sender)
+            date_display = _esc(date[:10] if len(date) >= 10 else date)
 
-            data.append([subject_display, sender_display, date_display])
+            data.append([
+                Paragraph(subject_display, dup_cell),
+                Paragraph(sender_display, dup_cell),
+                Paragraph(date_display, dup_cell),
+            ])
 
         table = Table(data, colWidths=col_widths, repeatRows=1)
         table.setStyle(_dup_member_table_style())

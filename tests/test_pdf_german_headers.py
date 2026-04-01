@@ -274,7 +274,7 @@ class TestGermanSectionHeaders:
 
     def test_anhaenge_column_present(self, extracted_text: str) -> None:
         """'Anhänge' column header must appear in the E-Mail-Liste table."""
-        assert "Anh\xe4nge" in extracted_text, (
+        assert "Anh\xe4nge" in extracted_text.replace("\n", ""), (
             f"'Anhänge' not found in PDF text. Got:\n{extracted_text!r}"
         )
 
@@ -324,7 +324,7 @@ class TestUmlautRendering:
         ]
         pdf = build_report_pdf(records, [], "2024-01-15T10:00:00+00:00")
         text = _extract_pdf_text(pdf)
-        assert "Anh\xe4nge" in text, (
+        assert "Anh\xe4nge" in text.replace("\n", ""), (
             f"'Anhänge' not found in extracted text. Got:\n{text!r}"
         )
 
