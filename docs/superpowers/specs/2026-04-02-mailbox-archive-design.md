@@ -267,6 +267,44 @@ also deleted.
 `db-start`, `db-migrate`, `index-mailbox`, `index-all`
 (plus new: `sync-all`, `extract-attachments`, `search-archive`)
 
+## Testing Phase
+
+Every step is verified locally with synthetic fixture data before touching the real
+server. Tests run without network access and without a real IMAP/rsync connection.
+
+### Fixture setup
+
+A small synthetic mailbox is created under `tests/fixtures/mailboxes/test_mailbox/`
+containing:
+- 3 plain-text emails
+- 1 email with an attachment (PDF fixture)
+- 1 email with a duplicate of an earlier email (same bytes)
+- A matching `mailboxes.txt` listing only `test_mailbox`
+
+### Per-step verification
+
+| Step | How tested | Tool |
+|------|-----------|------|
+| rsync | `sync-all` accepts `--src-base <local-path>` override to rsync from a local fixture dir instead of the server | `pytest` + devenv QA script |
+| Attachment extraction | `extract_attachments.py` runs on fixture maildir; assert files present under `attachments/` with correct sha256 names | `pytest` |
+| SQLite indexing | `index_mailbox.py` runs on fixture; assert row count, column values, `to_addrs`/`cc_addrs`/`body_text` populated | `pytest` |
+| Schema migration | Create an old-schema SQLite (v1), run indexer, assert new columns exist | `pytest` |
+| MySQL import | `import_archive.php` runs against fixture global SQLite; assert row counts in `archive_emails` and `archive_attachments` | devenv QA script (`qa-archive.sh`) |
+| search-archive | Query for a known keyword from fixture body; assert result appears | devenv QA script |
+| Full pipeline | `sync-all --mailboxes-file tests/fixtures/mailboxes.txt --src-base tests/fixtures` exits 0 and populates DB | devenv QA script |
+
+### QA script
+
+`web/scripts/qa-archive.sh` orchestrates the full local test:
+1. Start MariaDB (`db-start`)
+2. Run migrations (`db-migrate`)
+3. Run `sync-all` against fixture data (no server)
+4. Assert MySQL row counts match expected
+5. Assert `search-archive` returns a known result
+6. Exit 0 only if all assertions pass
+
+All tests pass locally before `sync-all` is run against the real server.
+
 ## Not in Scope (this phase)
 
 - Web UI / subdomain (later)
