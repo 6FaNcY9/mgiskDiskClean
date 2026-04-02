@@ -1,0 +1,7 @@
+# data/mailboxes.txt
+# One mailbox name per line. Comments (#) and blank lines are ignored.
+# Allowed characters: [a-zA-Z0-9._-]
+# Example:
+#   gabriel.hangel
+#   info
+#   office
