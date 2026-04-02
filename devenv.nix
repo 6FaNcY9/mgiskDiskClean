@@ -51,32 +51,6 @@
   # ── devenv scripts ────────────────────────────────────────────────────────
   scripts = {
 
-    # ── Existing pipeline script (preserved) ─────────────────────────────
-    scan-mailbox.exec = ''
-      if [ -z "$1" ]; then
-        echo "Usage: scan-mailbox <mailbox>"
-        echo "  e.g. scan-mailbox gabriel.hangel"
-        exit 1
-      fi
-      MAILBOX="$1"
-      LOCAL_MAIL=/tmp/mrija_maildir/$MAILBOX
-      mkdir -p $LOCAL_MAIL
-
-      echo "==> Pulling maildir from server (may take a while)..."
-      rsync -az --info=progress2 \
-        mrija_org@s16.thehost.com.ua:email/mrija.org/$MAILBOX/.maildir/ \
-        $LOCAL_MAIL/.maildir/ \
-        || { echo "ERROR: rsync failed"; exit 1; }
-
-      echo "==> Generating report..."
-      PYTHONPATH=$DEVENV_ROOT/src python -m maildir_report \
-        $LOCAL_MAIL/.maildir \
-        $DEVENV_ROOT/reports \
-        || { echo "ERROR: report generation failed"; exit 1; }
-
-      echo "==> Done. Outputs written to $DEVENV_ROOT/reports/"
-    '';
-
     # ── db-start: start/verify the local MariaDB dev server ──────────────
     db-start.exec = ''
       if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
@@ -124,90 +98,6 @@
       php "$DEVENV_ROOT/web/src/cli/migrate.php" --socket "$SOCK"
     '';
 
-    # ── store-mailbox: rsync + pre-store dedup hook + pipeline ────────────
-    store-mailbox.exec = ''
-      if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "Usage: store-mailbox <mailbox> [--src <rsync-source>]"
-        echo ""
-        echo "  Store a remote mailbox locally under \$DEVENV_ROOT/data/mailboxes/<mailbox>/."
-        echo "  Layout created:"
-        echo "    maildir/.maildir/   rsync target (Maildir format)"
-        echo "    reports/            pipeline outputs (PDF, manifest, decisions CSV)"
-        echo "    attachments/        extracted attachment files (Task 2b)"
-        echo "    index.sqlite        per-mailbox index DB (Task 3/4)"
-        echo ""
-        echo "  Workflow:"
-        echo "    1. rsync remote mailbox into maildir/.maildir/"
-        echo "    2. Run pre-store dedup (quarantine-only) on local copy only"
-        echo "    3. Run maildir_report pipeline into reports/"
-        echo ""
-        echo "  Scope guardrail: dedup operates ONLY on local data/ copy."
-        echo "  No changes are made to the remote server mailbox."
-        echo ""
-        echo "Options:"
-        echo "  --src <rsync-source>   Override rsync source URL"
-        echo "                         Default: mrija_org@s16.thehost.com.ua:email/mrija.org/<mailbox>/.maildir/"
-        echo "  --help                 Show this help message and exit"
-        exit 0
-      fi
-
-      if [ -z "$1" ]; then
-        echo "ERROR: mailbox name required"
-        echo "Run: store-mailbox --help"
-        exit 1
-      fi
-
-      MAILBOX="$1"
-      shift
-      DATA_ROOT="$DEVENV_ROOT/data/mailboxes/$MAILBOX"
-      MAILDIR_DST="$DATA_ROOT/maildir/.maildir"
-      REPORTS_DST="$DATA_ROOT/reports"
-      ATTACHMENTS_DST="$DATA_ROOT/attachments"
-
-      # Parse optional --src override
-      RSYNC_SRC="mrija_org@s16.thehost.com.ua:email/mrija.org/$MAILBOX/.maildir/"
-      while [ $# -gt 0 ]; do
-        case "$1" in
-          --src) RSYNC_SRC="$2"; shift 2 ;;
-          *) echo "Unknown option: $1"; exit 1 ;;
-        esac
-      done
-
-      # 1. Create stable local folder layout
-      mkdir -p "$MAILDIR_DST" "$REPORTS_DST" "$ATTACHMENTS_DST"
-
-      echo "==> [store-mailbox] rsync '$RSYNC_SRC' -> '$MAILDIR_DST'"
-      rsync -az --info=progress2 \
-        "$RSYNC_SRC" \
-        "$MAILDIR_DST/" \
-        || { echo "ERROR: rsync failed"; exit 1; }
-
-      # 2. Pre-store dedup (quarantine-only; scope: local data/ only)
-      #    SCOPE GUARDRAIL: only path $DATA_ROOT is ever touched.
-      echo "==> [store-mailbox] Running pre-store dedup on local copy..."
-      if command -v python3 >/dev/null 2>&1 && \
-         python3 -c "import maildir_report.pre_store_dedup" 2>/dev/null; then
-        PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.pre_store_dedup \
-          --maildir-root "$MAILDIR_DST" \
-          --quarantine-root "$DATA_ROOT/quarantine" \
-          || { echo "ERROR: pre-store dedup failed; aborting store"; exit 1; }
-      else
-        echo "  (pre-store dedup module not yet available; skipping — Task 2a)"
-      fi
-
-      # 3. Run pipeline: generate PDF/manifest/decisions CSV into reports/
-      echo "==> [store-mailbox] Generating pipeline outputs..."
-      PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report \
-        "$MAILDIR_DST" \
-        "$REPORTS_DST" \
-        || { echo "ERROR: report generation failed"; exit 1; }
-
-      echo "==> Done."
-      echo "  maildir   : $MAILDIR_DST"
-      echo "  reports   : $REPORTS_DST"
-      echo "  attachments: $ATTACHMENTS_DST"
-    '';
-
     # ── index-mailbox: (re)build per-mailbox index DB ────────────────────
     index-mailbox.exec = ''
       if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
@@ -219,8 +109,7 @@
         echo "  Index written to:"
         echo "    \$DEVENV_ROOT/data/mailboxes/<mailbox>/index.sqlite"
         echo ""
-        echo "  Requires: store-mailbox to have run first."
-        echo "  Implemented fully in Task 2b."
+        echo "  Requires: sync-all to have run first."
         echo ""
         echo "Options:"
         echo "  --help    Show this help message and exit"
@@ -251,8 +140,6 @@
         echo "  Global index written to:"
         echo "    \$DEVENV_ROOT/data/index/mail_index.sqlite"
         echo ""
-        echo "  Implemented fully in Task 2b (optional global index)."
-        echo ""
         echo "Options:"
         echo "  --help    Show this help message and exit"
         exit 0
@@ -272,155 +159,58 @@
       echo "==> Done. Global index: $GLOBAL_INDEX_DIR/mail_index.sqlite"
     '';
 
-    # ── review-start: start PHP built-in server for local QA ─────────────
-    review-start.exec = ''
+    # ── extract-attachments: extract MIME attachments from stored maildir ──
+    extract-attachments.exec = ''
       if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "Usage: review-start [--port <port>] [--host <host>]"
+        echo "Usage: extract-attachments <mailbox>"
         echo ""
-        echo "  Start the PHP built-in server for local QA."
-        echo "  Serves web/public/ with local config pointing at \$DEVENV_ROOT/data/."
+        echo "  Extract MIME attachments from the stored Maildir for <mailbox>."
+        echo "  Reads from:  \$DEVENV_ROOT/data/mailboxes/<mailbox>/maildir/.maildir/"
+        echo "  Writes to:   \$DEVENV_ROOT/data/mailboxes/<mailbox>/attachments/"
+        echo ""
+        echo "  Idempotent: re-running skips already-extracted files."
         echo ""
         echo "Options:"
-        echo "  --port <port>   Listen port (default: 8000)"
-        echo "  --host <host>   Listen host (default: 127.0.0.1)"
-        echo "  --help          Show this help message and exit"
-        echo ""
-        echo "  Requires web/config/local.php to exist."
-        echo "  Copy web/config/local.php.example -> web/config/local.php and edit."
+        echo "  --help    Show this help message and exit"
         exit 0
       fi
-      HOST="127.0.0.1"
-      PORT="8000"
-      while [ $# -gt 0 ]; do
-        case "$1" in
-          --port) PORT="$2"; shift 2 ;;
-          --host) HOST="$2"; shift 2 ;;
-          *) echo "Unknown option: $1"; exit 1 ;;
-        esac
-      done
-      CONFIG="$DEVENV_ROOT/web/config/local.php"
-      if [ ! -f "$CONFIG" ]; then
-        echo "ERROR: $CONFIG not found."
-        echo "  Copy: cp web/config/local.php.example web/config/local.php"
-        echo "  Then edit it with your local settings."
-        exit 1
-      fi
-      echo "==> Starting PHP built-in server at http://$HOST:$PORT"
-      echo "    Document root: $DEVENV_ROOT/web/public"
-      echo "    Config: $CONFIG"
-      php -S "$HOST:$PORT" -t "$DEVENV_ROOT/web/public"
-    '';
-
-    # ── apply-decisions: invoke local Python decisions apply tool ─────────
-    apply-decisions.exec = ''
-      if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "Usage: apply-decisions <mailbox> <reviewed_decisions.csv> [--mode quarantine|delete] [--dry-run]"
-        echo ""
-        echo "  Apply a reviewed decisions CSV to the local stored mailbox copy."
-        echo "  Operates ONLY on: \$DEVENV_ROOT/data/mailboxes/<mailbox>/maildir/.maildir/"
-        echo ""
-        echo "  Workflow (plan-then-apply):"
-        echo "    1. plan  — writes cleanup_plan.json with candidate list + candidate_set_hash"
-        echo "    2. apply — requires --plan cleanup_plan.json --confirm <hash-prefix>"
-        echo ""
-        echo "Options:"
-        echo "  --mode quarantine|delete   Action for 'delete' rows (default: quarantine)"
-        echo "  --dry-run                  Print plan; write cleanup_plan.json; no file moves"
-        echo "  --help                     Show this help message and exit"
-        echo ""
-        echo "  Implemented fully in Task 12."
-        exit 0
-      fi
-      if [ -z "$1" ] || [ -z "$2" ]; then
-        echo "ERROR: mailbox and decisions CSV path are required"
-        echo "Run: apply-decisions --help"
+      if [ -z "$1" ]; then
+        echo "ERROR: mailbox name required"
+        echo "Run: extract-attachments --help"
         exit 1
       fi
       MAILBOX="$1"
-      DECISIONS_CSV="$2"
-      shift 2
-      MAILDIR_ROOT="$DEVENV_ROOT/data/mailboxes/$MAILBOX/maildir/.maildir"
-      PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.apply_decisions \
-        --maildir-root "$MAILDIR_ROOT" \
-        --decisions-csv "$DECISIONS_CSV" \
-        "$@"
-    '';
-
-    # ── fetch-imap: fetch IMAP mailbox and materialise local Maildir ─────────
-    fetch-imap.exec = ''
-      if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "Usage: fetch-imap <mailbox> <data-dir> [--since YYYY-MM-DD]"
-        echo ""
-        echo "  Fetch messages from an IMAP server (IMAPS/TLS, port 993) and"
-        echo "  materialise a local Maildir under:"
-        echo "    <data-dir>/imap/<mailbox>/INBOX/Maildir/cur/{uidvalidity}.{uid}.eml"
-        echo ""
-        echo "  Credentials must be set as environment variables:"
-        echo "    IMAP_SERVER   IMAP server hostname"
-        echo "    IMAP_USER     IMAP login username"
-        echo "    IMAP_PASS     IMAP password or app password"
-        echo ""
-        echo "  The operation is READ-ONLY: no server-side mutations are performed."
-        echo "  Re-running is idempotent: same messages produce the same file list."
-        echo ""
-        echo "  After fetching, the local Maildir is ready for:"
-        echo "    PYTHONPATH=\$DEVENV_ROOT/src python3 -m maildir_report \\"
-        echo "      <data-dir>/imap/<mailbox>/INBOX/Maildir \\"
-        echo "      \$DEVENV_ROOT/reports"
-        echo ""
-        echo "Options:"
-        echo "  --since YYYY-MM-DD   Fetch only messages on or after this date"
-        echo "  --help               Show this help message and exit"
-        exit 0
-      fi
-      if [ -z "$1" ] || [ -z "$2" ]; then
-        echo "ERROR: mailbox name and data-dir are required"
-        echo "Run: fetch-imap --help"
+      DATA_ROOT="$DEVENV_ROOT/data/mailboxes/$MAILBOX"
+      MAILDIR="$DATA_ROOT/maildir/.maildir"
+      ATTACHMENTS="$DATA_ROOT/attachments"
+      if [ ! -d "$MAILDIR" ]; then
+        echo "ERROR: Maildir not found: $MAILDIR"
+        echo "Run sync-all first."
         exit 1
       fi
-      MAILBOX="$1"
-      DATA_DIR="$2"
-      shift 2
-      SINCE_ARG=""
-      while [ $# -gt 0 ]; do
-        case "$1" in
-          --since) SINCE_ARG="--since $2"; shift 2 ;;
-          *) echo "Unknown option: $1"; exit 1 ;;
-        esac
-      done
-      if [ -z "''${IMAP_SERVER:-}" ] || [ -z "''${IMAP_USER:-}" ] || [ -z "''${IMAP_PASS:-}" ]; then
-        echo "ERROR: IMAP_SERVER, IMAP_USER, and IMAP_PASS must all be set."
-        echo "  Example: export IMAP_SERVER=imap.gmail.com IMAP_USER=you@example.com IMAP_PASS=apppassword"
-        exit 1
-      fi
-      echo "==> [fetch-imap] Fetching '$MAILBOX' from $IMAP_SERVER (IMAPS)..."
-      PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.imap_ingest $SINCE_ARG \
-        "$MAILBOX" "$DATA_DIR" \
-        || { echo "ERROR: IMAP fetch failed"; exit 1; }
-      echo "==> [fetch-imap] Done."
-      echo "  Maildir: $DATA_DIR/imap/$MAILBOX/INBOX/Maildir/"
+      mkdir -p "$ATTACHMENTS"
+      echo "==> [extract-attachments] Extracting attachments for '$MAILBOX'..."
+      PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.extract_attachments \
+        "$MAILDIR" "$ATTACHMENTS" \
+        || { echo "ERROR: extract-attachments failed"; exit 1; }
+      echo "==> Done. Attachments: $ATTACHMENTS"
     '';
-
-
 
   };
 
   # ── Shell welcome message ─────────────────────────────────────────────────
   enterShell = ''
     echo ""
-    echo "  maildir-pdf-report devenv"
+    echo "  mailbox-archive devenv"
     echo "  ──────────────────────────────────────────────────────"
-    echo "  scan-mailbox <mailbox>         rsync maildir, generate PDF/manifest/decisions"
-    echo "  store-mailbox <mailbox>        rsync + dedup + pipeline into data/mailboxes/"
-    echo "  fetch-imap <mailbox> <dir>     fetch IMAP mailbox to local Maildir (read-only)"
+    echo "  sync-all                       rsync all mailboxes, extract, index, import"
+    echo "  extract-attachments <mailbox>  extract MIME attachments for one mailbox"
     echo "  index-mailbox <mailbox>        (re)build per-mailbox SQLite index"
     echo "  index-all                      (re)build global index across all mailboxes"
+    echo "  search-archive <query>         FULLTEXT search across archived emails"
     echo "  db-start                       start local MariaDB dev server"
     echo "  db-migrate                     run SQL migrations"
-    echo "  review-start                   start PHP dev server at http://127.0.0.1:8000"
-    echo "  apply-decisions <mb> <csv>     apply reviewed decisions locally"
     echo "  ──────────────────────────────────────────────────────"
-    echo "  reports : $DEVENV_ROOT/reports/"
     echo "  data    : $DEVENV_ROOT/data/"
     echo "  logs    : $DEVENV_ROOT/logs/"
     echo ""
