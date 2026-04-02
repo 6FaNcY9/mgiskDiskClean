@@ -92,6 +92,8 @@ from maildir_report.parser import scan_maildir
 
 # ── DDL ───────────────────────────────────────────────────────────────────────
 
+_SCHEMA_VERSION = 2
+
 _CREATE_EMAILS = """
 CREATE TABLE IF NOT EXISTS emails (
     mailbox           TEXT    NOT NULL,
@@ -100,7 +102,10 @@ CREATE TABLE IF NOT EXISTS emails (
     folder            TEXT    NOT NULL,
     date              TEXT    NOT NULL,
     from_addr         TEXT    NOT NULL,
+    to_addrs          TEXT    NOT NULL DEFAULT '',
+    cc_addrs          TEXT    NOT NULL DEFAULT '',
     subject           TEXT    NOT NULL,
+    body_text         TEXT    NOT NULL DEFAULT '',
     total_size_bytes  INTEGER NOT NULL
 );
 """
@@ -158,6 +163,10 @@ class IndexResult:
 def _init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     """Open (or create) a SQLite database and ensure the schema exists.
 
+    Performs in-place migration from v1 (user_version < 2) to v2:
+    adds to_addrs, cc_addrs, body_text columns via ALTER TABLE ADD COLUMN.
+    Existing rows are preserved; new columns default to ''.
+
     Parameters
     ----------
     db_path:
@@ -174,10 +183,28 @@ def _init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
 
+    # Create tables (no-op if they already exist).
     conn.execute(_CREATE_EMAILS)
     conn.execute(_CREATE_ATTACHMENTS)
     for idx_sql in _CREATE_INDEXES:
         conn.execute(idx_sql)
+
+    # Schema migration: add new columns if missing.
+    existing_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if existing_version < _SCHEMA_VERSION:
+        existing_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(emails)")
+        }
+        for col, default in [
+            ("to_addrs", "''"),
+            ("cc_addrs", "''"),
+            ("body_text", "''"),
+        ]:
+            if col not in existing_cols:
+                conn.execute(
+                    f"ALTER TABLE emails ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}"
+                )
+        conn.execute(f"PRAGMA user_version={_SCHEMA_VERSION};")
 
     conn.commit()
     return conn
@@ -192,8 +219,9 @@ def _upsert_email(
     conn.execute(
         """
         INSERT OR REPLACE INTO emails
-            (mailbox, stable_id, filepath, folder, date, from_addr, subject, total_size_bytes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (mailbox, stable_id, filepath, folder, date, from_addr,
+             to_addrs, cc_addrs, subject, body_text, total_size_bytes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             mailbox,
@@ -202,7 +230,10 @@ def _upsert_email(
             email_rec.get("folder", ""),
             email_rec.get("date", ""),
             email_rec.get("sender", ""),
+            email_rec.get("to", ""),
+            email_rec.get("cc_addrs", ""),
             email_rec.get("subject", ""),
+            email_rec.get("body_text", ""),
             email_rec.get("total_size", 0),
         ),
     )
@@ -339,6 +370,11 @@ def index_mailbox(
         conn.commit()
         if global_conn:
             global_conn.commit()
+
+        # WAL checkpoint: flush WAL to main DB file after bulk write.
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        if global_conn:
+            global_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
     finally:
         conn.close()
