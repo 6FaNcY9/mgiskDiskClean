@@ -140,6 +140,30 @@ def _parse_date(date_str: str | None) -> tuple[str, str]:
     return "", (date_str[:30] if date_str else "")
 
 
+def _extract_body_text(msg: _emsg.Message) -> str:
+    """Extract the first text/plain body part as a decoded unicode string.
+
+    Charset fallback chain: declared charset -> utf-8 -> latin-1 (errors='replace').
+    Returns empty string if no text/plain part exists.
+    """
+    for part in msg.walk():
+        if part.get_content_type() != "text/plain":
+            continue
+        if part.get_filename():
+            # Named text/plain parts are attachments, not body text.
+            continue
+        payload = part.get_payload(decode=True)
+        if not isinstance(payload, (bytes, bytearray)) or not payload:
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        try:
+            return payload.decode(charset, errors="replace")
+        except (LookupError, UnicodeDecodeError):
+            try:
+                return payload.decode("utf-8", errors="replace")
+            except Exception:
+                return payload.decode("latin-1", errors="replace")
+    return ""
 # ── core parsing ──────────────────────────────────────────────────────────────
 
 
@@ -189,6 +213,7 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
     subject = _decode_header_str(msg.get("Subject", "(no subject)"))
     sender = _decode_header_str(msg.get("From", ""))
     to = _decode_header_str(msg.get("To", ""))
+    cc = _decode_header_str(msg.get("Cc", ""))
     date_day, date_fmt = _parse_date(msg.get("Date"))
 
     # ── 4. extract MIME parts (no silent size-threshold drops) ───────────────
@@ -274,6 +299,7 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
         raw_parts.append(part_record)
 
     sorted_parts = sort_parts(raw_parts)
+    body_text = _extract_body_text(msg)
 
     # ── 5. assemble EmailRecord ──────────────────────────────────────────────
     record: dict[str, Any] = {
@@ -284,6 +310,8 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
         "date_day": date_day,
         "sender": sender,
         "to": to,
+        "cc_addrs": cc,
+        "body_text": body_text,
         "folder": folder,
         "total_size": len(raw),
         "parts": sorted_parts,
