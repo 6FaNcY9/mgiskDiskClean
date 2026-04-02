@@ -196,6 +196,130 @@
       echo "==> Done. Attachments: $ATTACHMENTS"
     '';
 
+    # ── sync-all: weekly full archive sync for all mailboxes ─────────────
+    sync-all.exec = ''
+      if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+        echo "Usage: sync-all [--mailbox <name>] [--skip-rsync] [--skip-extract] [--skip-index]"
+        echo ""
+        echo "  Sync all mailboxes listed in data/mailboxes.txt:"
+        echo "    1. rsync each mailbox from the remote server"
+        echo "    2. extract-attachments for each mailbox"
+        echo "    3. index-mailbox (per-mailbox + global SQLite index)"
+        echo ""
+        echo "  Remote source: mrija_org@s16.thehost.com.ua:email/mrija.org/<mailbox>/.maildir/"
+        echo ""
+        echo "Options:"
+        echo "  --mailbox <name>   Sync only this mailbox (overrides mailboxes.txt)"
+        echo "  --skip-rsync       Skip rsync step (use existing local data)"
+        echo "  --skip-extract     Skip attachment extraction step"
+        echo "  --skip-index       Skip SQLite indexing step"
+        echo "  --help             Show this help message and exit"
+        exit 0
+      fi
+
+      MAILBOXES_FILE="$DEVENV_ROOT/data/mailboxes.txt"
+      GLOBAL_INDEX_DIR="$DEVENV_ROOT/data/index"
+      REMOTE_BASE="mrija_org@s16.thehost.com.ua:email/mrija.org"
+
+      SINGLE_MAILBOX=""
+      SKIP_RSYNC=0
+      SKIP_EXTRACT=0
+      SKIP_INDEX=0
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --mailbox) SINGLE_MAILBOX="$2"; shift 2 ;;
+          --skip-rsync) SKIP_RSYNC=1; shift ;;
+          --skip-extract) SKIP_EXTRACT=1; shift ;;
+          --skip-index) SKIP_INDEX=1; shift ;;
+          *) echo "Unknown option: $1"; exit 1 ;;
+        esac
+      done
+
+      if [ -n "$SINGLE_MAILBOX" ]; then
+        MAILBOX_LIST="$SINGLE_MAILBOX"
+      else
+        if [ ! -f "$MAILBOXES_FILE" ]; then
+          echo "ERROR: $MAILBOXES_FILE not found."
+          echo "  Create it with one mailbox name per line."
+          exit 1
+        fi
+        # Read mailboxes: strip comments (#) and blank lines, validate names
+        MAILBOX_LIST=""
+        while IFS= read -r line || [ -n "$line" ]; do
+          # Strip leading/trailing whitespace
+          line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          # Skip comments and empty lines
+          case "$line" in
+            "#"*|"") continue ;;
+          esac
+          # Validate: only [a-zA-Z0-9._-]
+          if ! echo "$line" | grep -qE '^[a-zA-Z0-9._-]+$'; then
+            echo "ERROR: Invalid mailbox name in $MAILBOXES_FILE: '$line'"
+            echo "  Allowed characters: letters, digits, dots, hyphens, underscores"
+            exit 1
+          fi
+          MAILBOX_LIST="$MAILBOX_LIST $line"
+        done < "$MAILBOXES_FILE"
+        MAILBOX_LIST="$(echo "$MAILBOX_LIST" | sed 's/^[[:space:]]*//')"
+        if [ -z "$MAILBOX_LIST" ]; then
+          echo "ERROR: No mailboxes found in $MAILBOXES_FILE"
+          exit 1
+        fi
+      fi
+
+      mkdir -p "$GLOBAL_INDEX_DIR"
+
+      for MAILBOX in $MAILBOX_LIST; do
+        echo ""
+        echo "==> [sync-all] Processing mailbox: $MAILBOX"
+        DATA_ROOT="$DEVENV_ROOT/data/mailboxes/$MAILBOX"
+        MAILDIR_DST="$DATA_ROOT/maildir/.maildir"
+
+        # Step 1: rsync
+        if [ "$SKIP_RSYNC" -eq 0 ]; then
+          mkdir -p "$MAILDIR_DST"
+          echo "    rsync from $REMOTE_BASE/$MAILBOX/.maildir/..."
+          rsync -az --info=progress2 \
+            "$REMOTE_BASE/$MAILBOX/.maildir/" \
+            "$MAILDIR_DST/" \
+            || { echo "ERROR: rsync failed for $MAILBOX"; exit 1; }
+          echo "    rsync done."
+        else
+          echo "    [skip-rsync] skipping rsync for $MAILBOX"
+        fi
+
+        # Step 2: extract attachments
+        if [ "$SKIP_EXTRACT" -eq 0 ]; then
+          echo "    extracting attachments..."
+          PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.extract_attachments \
+            "$MAILDIR_DST" "$DATA_ROOT/attachments" \
+            || { echo "ERROR: extract-attachments failed for $MAILBOX"; exit 1; }
+          echo "    extraction done."
+        else
+          echo "    [skip-extract] skipping extraction for $MAILBOX"
+        fi
+
+        # Step 3: index
+        if [ "$SKIP_INDEX" -eq 0 ]; then
+          echo "    indexing (per-mailbox + global)..."
+          PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.index_mailbox \
+            --mailbox "$MAILBOX" \
+            --data-root "$DATA_ROOT" \
+            --global-index "$GLOBAL_INDEX_DIR/mail_index.sqlite" \
+            || { echo "ERROR: index-mailbox failed for $MAILBOX"; exit 1; }
+          echo "    indexing done."
+        else
+          echo "    [skip-index] skipping indexing for $MAILBOX"
+        fi
+
+        echo "    $MAILBOX: done"
+      done
+
+      echo ""
+      echo "==> [sync-all] All mailboxes processed."
+      echo "    Global index: $GLOBAL_INDEX_DIR/mail_index.sqlite"
+    '';
+
   };
 
   # ── Shell welcome message ─────────────────────────────────────────────────
