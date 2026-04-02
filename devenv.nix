@@ -320,6 +320,57 @@
       echo "    Global index: $GLOBAL_INDEX_DIR/mail_index.sqlite"
     '';
 
+    # ── search-archive: full-text search across archived emails ──────────────
+    search-archive.exec = ''
+      if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+        echo "Usage: search-archive <query> [--mailbox <name>] [--limit <n>]"
+        echo ""
+        echo "  Full-text search across archived emails in MySQL."
+        echo "  Uses MariaDB FULLTEXT MATCH...AGAINST on subject, from_addr,"
+        echo "  to_addrs, cc_addrs, body_text."
+        echo ""
+        echo "Options:"
+        echo "  --mailbox <name>   Restrict search to one mailbox"
+        echo "  --limit <n>        Max results (default: 20)"
+        echo "  --help             Show this help message and exit"
+        exit 0
+      fi
+      if [ -z "''${1:-}" ]; then
+        echo "ERROR: search query required"
+        echo "Run: search-archive --help"
+        exit 1
+      fi
+
+      QUERY="$1"
+      shift
+      MAILBOX_FILTER=""
+      LIMIT=20
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --mailbox) MAILBOX_FILTER="$2"; shift 2 ;;
+          --limit)   LIMIT="$2"; shift 2 ;;
+          *) echo "Unknown option: $1"; exit 1 ;;
+        esac
+      done
+
+      SOCK="$DEVENV_STATE/mysql.sock"
+      WHERE="MATCH(subject, from_addr, to_addrs, cc_addrs, body_text) AGAINST('$QUERY' IN BOOLEAN MODE)"
+      if [ -n "$MAILBOX_FILTER" ]; then
+        WHERE="$WHERE AND mailbox = '$MAILBOX_FILTER'"
+      fi
+
+      echo "==> Searching archive for: $QUERY"
+      mysql -u mailreview --socket="$SOCK" mailreview \
+        --table \
+        -e "SELECT mailbox, date, from_addr, subject,
+                   LEFT(body_text, 120) AS body_preview
+            FROM archive_emails
+            WHERE $WHERE
+            ORDER BY date DESC
+            LIMIT $LIMIT;" \
+        || { echo "ERROR: search failed. Is db-start running?"; exit 1; }
+    '';
+
   };
 
   # ── Shell welcome message ─────────────────────────────────────────────────
