@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import email as _email
 import email.message as _emsg
-import hashlib  # retained for ids.py compatibility; hash.py is the canonical part-hashing path
 import pathlib
 from email.header import decode_header, make_header
 from email.utils import parsedate
