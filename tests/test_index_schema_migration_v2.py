@@ -10,8 +10,6 @@ Run: pytest tests/test_index_schema_migration_v2.py -v
 import sqlite3
 import pathlib
 
-import pytest
-
 from maildir_report.index_mailbox import _init_db
 
 

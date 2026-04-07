@@ -89,6 +89,7 @@ from maildir_report.extract_attachments import (
 from maildir_report.hash import sha256_hex
 from maildir_report.parser import scan_maildir
 
+_SCHEMA_VERSION = 2
 
 # ── DDL ───────────────────────────────────────────────────────────────────────
 
@@ -97,11 +98,14 @@ CREATE TABLE IF NOT EXISTS emails (
     mailbox           TEXT    NOT NULL,
     stable_id         TEXT    NOT NULL PRIMARY KEY,
     filepath          TEXT    NOT NULL,
-    folder            TEXT    NOT NULL,
-    date              TEXT    NOT NULL,
-    from_addr         TEXT    NOT NULL,
-    subject           TEXT    NOT NULL,
-    total_size_bytes  INTEGER NOT NULL
+    folder            TEXT    NOT NULL DEFAULT '',
+    date              TEXT    NOT NULL DEFAULT '',
+    from_addr         TEXT    NOT NULL DEFAULT '',
+    subject           TEXT    NOT NULL DEFAULT '',
+    total_size_bytes  INTEGER NOT NULL DEFAULT 0,
+    to_addrs          TEXT    NOT NULL DEFAULT '',
+    cc_addrs          TEXT    NOT NULL DEFAULT '',
+    body_text         TEXT    NOT NULL DEFAULT ''
 );
 """
 
@@ -156,30 +160,36 @@ class IndexResult:
 
 
 def _init_db(db_path: pathlib.Path) -> sqlite3.Connection:
-    """Open (or create) a SQLite database and ensure the schema exists.
-
-    Parameters
-    ----------
-    db_path:
-        Absolute path to the ``.sqlite`` file.  Parent directory must exist.
-
-    Returns
-    -------
-    sqlite3.Connection
-        Open connection with row_factory set to ``sqlite3.Row``.
-    """
+    """Open (or create) a SQLite database, ensure schema exists, migrate if needed."""
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    # WAL mode for better concurrent read access.
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
 
+    # Create tables (IF NOT EXISTS — safe for both new and existing DBs)
     conn.execute(_CREATE_EMAILS)
     conn.execute(_CREATE_ATTACHMENTS)
     for idx_sql in _CREATE_INDEXES:
         conn.execute(idx_sql)
-
     conn.commit()
+
+    # Version-based migration
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version < _SCHEMA_VERSION:
+        if version == 1:
+            # v1 → v2: add three new columns to emails
+            for col_def in [
+                "to_addrs TEXT NOT NULL DEFAULT ''",
+                "cc_addrs TEXT NOT NULL DEFAULT ''",
+                "body_text TEXT NOT NULL DEFAULT ''",
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE emails ADD COLUMN {col_def}")
+                except sqlite3.OperationalError:
+                    pass  # column already exists — idempotent
+        conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+        conn.commit()
+
     return conn
 
 
@@ -192,8 +202,9 @@ def _upsert_email(
     conn.execute(
         """
         INSERT OR REPLACE INTO emails
-            (mailbox, stable_id, filepath, folder, date, from_addr, subject, total_size_bytes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (mailbox, stable_id, filepath, folder, date, from_addr, subject,
+             total_size_bytes, to_addrs, cc_addrs, body_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             mailbox,
@@ -204,6 +215,9 @@ def _upsert_email(
             email_rec.get("sender", ""),
             email_rec.get("subject", ""),
             email_rec.get("total_size", 0),
+            email_rec.get("to", ""),
+            email_rec.get("cc_addrs", ""),
+            email_rec.get("body_text", ""),
         ),
     )
 
@@ -338,6 +352,13 @@ def index_mailbox(
 
         conn.commit()
         if global_conn:
+            global_conn.commit()
+
+        # Checkpoint WAL to prevent large lingering WAL files
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.commit()
+        if global_conn:
+            global_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             global_conn.commit()
 
     finally:
