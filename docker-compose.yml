@@ -1,0 +1,36 @@
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: mailreview
+      MARIADB_USER: mailreview
+      MARIADB_PASSWORD: mailreview
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: mailreview
+      DB_USER: mailreview
+      DB_PASS: mailreview
+    stdin_open: true
+    tty: true
+    command: bash
+
+volumes:
+  mariadb_data:
