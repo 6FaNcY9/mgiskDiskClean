@@ -1,0 +1,2 @@
+# Test mailbox list for QA — local fixtures only
+qa_test_mailbox
