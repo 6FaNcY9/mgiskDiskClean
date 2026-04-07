@@ -189,6 +189,7 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
     subject = _decode_header_str(msg.get("Subject", "(no subject)"))
     sender = _decode_header_str(msg.get("From", ""))
     to = _decode_header_str(msg.get("To", ""))
+    cc_addrs = _decode_header_str(msg.get("Cc", ""))
     date_day, date_fmt = _parse_date(msg.get("Date"))
 
     # ── 4. extract MIME parts (no silent size-threshold drops) ───────────────
@@ -275,6 +276,21 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
 
     sorted_parts = sort_parts(raw_parts)
 
+    # ── 4b. extract plain-text body ──────────────────────────────────────────
+    body_text = ""
+    for _part in msg.walk():
+        if _part.get_content_type() == "text/plain" and not _part.get_filename():
+            _charset = _part.get_content_charset() or "utf-8"
+            try:
+                _payload = _part.get_payload(decode=True)
+                if isinstance(_payload, (bytes, bytearray)):
+                    body_text = _payload.decode(_charset, errors="replace")
+            except (LookupError, UnicodeDecodeError):
+                _payload = _part.get_payload(decode=True)
+                if isinstance(_payload, (bytes, bytearray)):
+                    body_text = _payload.decode("latin-1", errors="replace")
+            break
+
     # ── 5. assemble EmailRecord ──────────────────────────────────────────────
     record: dict[str, Any] = {
         "filepath": filepath,
@@ -284,6 +300,8 @@ def parse_email_file(filepath: str, folder: str) -> dict[str, Any]:
         "date_day": date_day,
         "sender": sender,
         "to": to,
+        "cc_addrs": cc_addrs,
+        "body_text": body_text,
         "folder": folder,
         "total_size": len(raw),
         "parts": sorted_parts,
