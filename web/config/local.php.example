@@ -18,7 +18,7 @@ return [
     // ── Database ──────────────────────────────────────────────────────────
     // MariaDB/MySQL connection. Use socket for local dev (no TCP password needed).
     'db' => [
-        'socket'   => getenv('DEVENV_STATE') . '/mysql.sock',  // local dev socket
+        'socket'   => getenv('MYSQL_UNIX_PORT') ?: (getenv('DEVENV_STATE') . '/mysql.sock'),  // local dev socket
         'host'     => '127.0.0.1',  // used if socket is empty
         'port'     => 3306,
         'dbname'   => 'mailreview',

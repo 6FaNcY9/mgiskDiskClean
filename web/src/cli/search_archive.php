@@ -101,7 +101,11 @@ $sql .= " GROUP BY e.mailbox, e.stable_id ORDER BY e.date DESC LIMIT ?";
 $params[] = $limit;
 
 $stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+// Bind all params; LIMIT must be bound as integer to avoid quoted string syntax error
+foreach ($params as $i => $val) {
+    $stmt->bindValue($i + 1, $val, is_int($val) ? PDO::PARAM_INT : PDO::PARAM_STR);
+}
+$stmt->execute();
 $rows = $stmt->fetchAll();
 
 // ── Print results ──────────────────────────────────────────────────────────

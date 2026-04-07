@@ -12,7 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVENV_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FIXTURES="$DEVENV_ROOT/tests/fixtures"
-SOCKET="${DEVENV_STATE:-}/mysql.sock"
+SOCKET="${MYSQL_UNIX_PORT:-${DEVENV_STATE:-}/mysql.sock}"
 MAILBOX="qa_test_mailbox"
 GLOBAL_INDEX="$DEVENV_ROOT/data/index/mail_index.sqlite"
 
@@ -32,12 +32,12 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> [qa-archive] Step 1: ensure DB is running and migrated..."
-devenv run db-start 2>/dev/null || true
-devenv run db-migrate
+db-start 2>/dev/null || true
+db-migrate --socket "$SOCKET"
 
 echo ""
 echo "==> [qa-archive] Step 2: sync fixture mailbox (no server)..."
-devenv run sync-all \
+sync-all \
     --mailboxes-file "$FIXTURES/mailboxes.txt" \
     --src-base "$FIXTURES/src" \
     --skip-import
@@ -77,7 +77,7 @@ echo "  archive_attachments ($MAILBOX): $ATT_COUNT rows ✓"
 
 echo ""
 echo "==> [qa-archive] Step 6: search-archive test..."
-RESULT=$(devenv run search-archive "fixture_unique_keyword_alpha" 2>&1 || true)
+RESULT=$(search-archive "fixture_unique_keyword_alpha" 2>&1 || true)
 if ! echo "$RESULT" | grep -qi "$MAILBOX"; then
     echo "FAIL: search-archive did not return '$MAILBOX' for known keyword"
     echo "Output was:"
