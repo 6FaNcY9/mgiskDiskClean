@@ -79,7 +79,7 @@ import argparse
 import pathlib
 import sqlite3
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from maildir_report.extract_attachments import (
