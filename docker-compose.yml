@@ -32,5 +32,23 @@ services:
     tty: true
     command: bash
 
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: mailreview
+      DB_USER: mailreview
+      DB_PASS: mailreview
+    command: php -S 0.0.0.0:8080 -t /app/web/public
+
 volumes:
   mariadb_data:
