@@ -55,7 +55,7 @@ PYEOF
 
 log "==> Step 1: Extract attachments"
 PYTHONPATH="$DEVENV_ROOT/src" python3 -m maildir_report.extract_attachments \
-  "$DATA_ROOT/maildir/.maildir" "$ATTACHMENTS" \
+  --maildir-root "$DATA_ROOT/maildir/.maildir" --output-root "$ATTACHMENTS" \
   || fail "extract_attachments failed"
 ATT_COUNT=$(ls "$ATTACHMENTS" | wc -l | tr -d ' ')
 [ "$ATT_COUNT" -ge 1 ] && pass "attachments extracted: $ATT_COUNT files" || fail "No attachments extracted"
@@ -80,31 +80,31 @@ BODY_VAL=$(sqlite3 "$DATA_ROOT/index.sqlite" "SELECT body_text FROM emails LIMIT
 echo "$BODY_VAL" | grep -q "QA body text" && pass "body_text stored correctly" || fail "body_text not stored: got '$BODY_VAL'"
 
 log "==> Step 3: Import into MySQL"
-SOCK="${DEVENV_STATE:-}/mysql.sock"
+SOCK="${MYSQL_UNIX_PORT:-${DEVENV_STATE:-$DEVENV_ROOT/.devenv/state}/mysql.sock}"
 php "$DEVENV_ROOT/web/src/cli/import_archive.php" \
   --sqlite "$DATA_ROOT/index.sqlite" \
   --socket "$SOCK" \
   ${QUIET:+--quiet} \
   || fail "import_archive.php failed"
 
-MYSQL_COUNT=$(mysql -u mailreview --socket="$SOCK" mailreview \
+MYSQL_COUNT=$(mariadb -u mailreview --socket="$SOCK" mailreview \
   -e "SELECT COUNT(*) FROM archive_emails WHERE mailbox='$QA_MAILBOX';" \
   --skip-column-names 2>/dev/null)
 [ "${MYSQL_COUNT:-0}" -ge 1 ] && pass "emails in MySQL: $MYSQL_COUNT" || fail "No emails in archive_emails"
 
-ATT_MYSQL=$(mysql -u mailreview --socket="$SOCK" mailreview \
+ATT_MYSQL=$(mariadb -u mailreview --socket="$SOCK" mailreview \
   -e "SELECT COUNT(*) FROM archive_attachments WHERE mailbox='$QA_MAILBOX';" \
   --skip-column-names 2>/dev/null)
 [ "${ATT_MYSQL:-0}" -ge 1 ] && pass "attachments in MySQL: $ATT_MYSQL" || fail "No attachments in archive_attachments"
 
 log "==> Step 4: Verify FULLTEXT search"
-FT_RESULT=$(mysql -u mailreview --socket="$SOCK" mailreview \
+FT_RESULT=$(mariadb -u mailreview --socket="$SOCK" mailreview \
   -e "SELECT stable_id FROM archive_emails WHERE MATCH(subject,from_addr,to_addrs,cc_addrs,body_text) AGAINST('QA body text' IN BOOLEAN MODE) AND mailbox='$QA_MAILBOX';" \
   --skip-column-names 2>/dev/null)
 [ -n "$FT_RESULT" ] && pass "FULLTEXT search returned results" || fail "FULLTEXT search returned no results"
 
 log "==> Cleanup"
-mysql -u mailreview --socket="$SOCK" mailreview \
+mariadb -u mailreview --socket="$SOCK" mailreview \
   -e "DELETE FROM archive_emails WHERE mailbox='$QA_MAILBOX'; DELETE FROM archive_attachments WHERE mailbox='$QA_MAILBOX';" \
   2>/dev/null && pass "MySQL cleanup done" || true
 rm -rf "$DATA_ROOT" && pass "synthetic mailbox removed" || true

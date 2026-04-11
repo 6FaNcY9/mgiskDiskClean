@@ -12,6 +12,9 @@ devenv.lock
 # web app — local secrets (never commit)
 web/config/local.php
 
+# local secrets — SSH passwords, env overrides
+.env
+
 # local mailbox data (large; outside webroot)
 data/
 

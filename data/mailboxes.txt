@@ -1,7 +1,25 @@
 # data/mailboxes.txt
 # One mailbox name per line. Comments (#) and blank lines are ignored.
 # Allowed characters: [a-zA-Z0-9._-]
-# Example:
-#   gabriel.hangel
-#   info
-#   office
+
+admin
+andrii.karioti
+atmosphaere
+charity
+gabriel.hangel
+maryna.mishchenko
+media
+mitgliedschaft
+mykhailo.karioti
+mykyta.pogorielov
+office
+oksana.mishchenko
+olena.stepura
+patreon
+postmaster
+pr
+production
+ruediger.lauermann
+sc
+sportzentrum
+vinobandit

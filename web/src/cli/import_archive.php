@@ -80,7 +80,7 @@ if (!is_file($configPath)) {
 $config = require $configPath;
 $dbCfg  = $config['db'] ?? [];
 
-$socket = $opts['socket'] ?? $dbCfg['socket'] ?? (getenv('DEVENV_STATE') . '/mysql.sock');
+$socket = $opts['socket'] ?? $dbCfg['socket'] ?? (getenv('MYSQL_UNIX_PORT') ?: (getenv('DEVENV_STATE') . '/mysql.sock'));
 
 // ── Connect to MySQL ─────────────────────────────────────────────────────────
 if ($socket && file_exists($socket)) {
