@@ -81,6 +81,10 @@ class EmailRecord(TypedDict, total=False):
         Decoded ``From:`` header.
     to : str
         Decoded ``To:`` header.
+    cc_addrs : str
+        Raw ``Cc:`` header string; empty when absent.
+    body_text : str
+        Decoded plain-text body; empty when no text/plain part.
     folder : str
         Maildir folder name (e.g. ``"INBOX"``, ``".Sent"``).
     total_size : int
@@ -102,6 +106,8 @@ class EmailRecord(TypedDict, total=False):
     date_day: str
     sender: str
     to: str
+    cc_addrs: str
+    body_text: str
     folder: str
     total_size: int
     parts: list[Any]  # list[PartRecord] — avoids circular import issues

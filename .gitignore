@@ -20,3 +20,7 @@ data/
 
 # git worktrees
 .worktrees/
+
+# IDE / tooling
+.idea/
+.superpowers/

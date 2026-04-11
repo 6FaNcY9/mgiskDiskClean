@@ -1,0 +1,44 @@
+# .github/workflows/build-windows-exe.yml
+# Builds MrijaArchive.exe on a Windows runner and uploads it as an artifact.
+# Trigger: push to feature/mailbox-archive, or manually via workflow_dispatch.
+# Download the .exe from: Actions tab -> latest run -> Artifacts -> MrijaArchive-exe
+
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [feature/mailbox-archive]
+    paths:
+      - 'launcher/windows/**'
+      - 'web/**'
+      - 'src/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: launcher/windows
+        run: pip install -r requirements.txt
+
+      - name: Build exe
+        working-directory: launcher/windows
+        run: pyinstaller app.spec --noconfirm
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MrijaArchive-exe
+          path: launcher/windows/dist/MrijaArchive.exe
+          retention-days: 30
