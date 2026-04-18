@@ -44,6 +44,8 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/app/data
+      - ./web:/app/web
+      - ./web/config/local.php.docker:/app/web/config/local.php
     environment:
       DB_HOST: db
       DB_PORT: 3306
