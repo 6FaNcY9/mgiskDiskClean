@@ -3,12 +3,10 @@ services:
     image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: rootpass
-      MARIADB_DATABASE: mailreview
-      MARIADB_USER: mailreview
-      MARIADB_PASSWORD: mailreview
-    ports:
-      - "3306:3306"
+      MARIADB_ROOT_PASSWORD: ${MRIJA_DB_ROOT_PASSWORD:-change-this-root-password}
+      MARIADB_DATABASE: ${MRIJA_DB_NAME:-mailreview}
+      MARIADB_USER: ${MRIJA_DB_USER:-mailreview}
+      MARIADB_PASSWORD: ${MRIJA_DB_PASSWORD:-change-this-app-password}
     volumes:
       - mariadb_data:/var/lib/mysql
     healthcheck:
@@ -27,9 +25,9 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_NAME: mailreview
-      DB_USER: mailreview
-      DB_PASS: mailreview
+      DB_NAME: ${MRIJA_DB_NAME:-mailreview}
+      DB_USER: ${MRIJA_DB_USER:-mailreview}
+      DB_PASS: ${MRIJA_DB_PASSWORD:-change-this-app-password}
     stdin_open: true
     tty: true
     command: bash
@@ -41,7 +39,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "${MRIJA_WEB_PORT:-8080}:8080"
     volumes:
       - ./data:/app/data
       - ./web:/app/web
@@ -49,9 +47,11 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_NAME: mailreview
-      DB_USER: mailreview
-      DB_PASS: mailreview
+      DB_NAME: ${MRIJA_DB_NAME:-mailreview}
+      DB_USER: ${MRIJA_DB_USER:-mailreview}
+      DB_PASS: ${MRIJA_DB_PASSWORD:-change-this-app-password}
+      COWORKER_PASSWORD_HASH: ${COWORKER_PASSWORD_HASH:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
     command: php -S 0.0.0.0:8080 -t /app/web/public
 
 volumes:

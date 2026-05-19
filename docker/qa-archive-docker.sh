@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# docker/qa-archive-docker.sh — QA script adapted for Docker (no devenv required).
-# Mirrors web/scripts/qa-archive.sh but calls Python/PHP directly.
+# docker/qa-archive-docker.sh — canonical QA script for the supported Docker Compose runtime.
+# Mirrors web/scripts/qa-archive.sh but calls Python/PHP directly inside the container.
 #
-# Usage: bash docker/qa-archive-docker.sh
+# Usage: docker compose run --rm app bash docker/qa-archive-docker.sh
 # Exit codes: 0 = all assertions passed, 1 = any assertion failed
 
 set -euo pipefail

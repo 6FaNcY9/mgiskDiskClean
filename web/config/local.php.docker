@@ -11,12 +11,12 @@ return [
         'port'     => (int) ($_ENV['DB_PORT'] ?? getenv('DB_PORT') ?: 3306),
         'dbname'   => $_ENV['DB_NAME']   ?? getenv('DB_NAME')   ?: 'mailreview',
         'user'     => $_ENV['DB_USER']   ?? getenv('DB_USER')   ?: 'mailreview',
-        'password' => $_ENV['DB_PASS']   ?? getenv('DB_PASS')   ?: 'mailreview',
+        'password' => $_ENV['DB_PASS']   ?? getenv('DB_PASS')   ?: '',
         'charset'  => 'utf8mb4',
     ],
 
-    'coworker_password_hash' => '',
-    'admin_password_hash'    => '',
+    'coworker_password_hash' => $_ENV['COWORKER_PASSWORD_HASH'] ?? getenv('COWORKER_PASSWORD_HASH') ?: '',
+    'admin_password_hash'    => $_ENV['ADMIN_PASSWORD_HASH'] ?? getenv('ADMIN_PASSWORD_HASH') ?: '',
 
     'session' => [
         'name'     => 'mailreview_session',

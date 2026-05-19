@@ -1,7 +1,8 @@
 # mgiskDiskClean
 
-Self-contained devenv for mrija.org mailbox disk cleanup.
-Scans Maildir attachments and generates a PDF report for the owner to review.
+Docker Compose is the supported local runtime for this repository.
+It runs the archive stack the same way on Linux, macOS, and Windows (the Windows launcher already wraps Docker Compose).
+`devenv` is kept only as an optional developer convenience path.
 
 ## Structure
 
@@ -15,24 +16,53 @@ mgiskDiskClean/
   logs/               # logs (generated, not in git)
 ```
 
-## Setup
+## Supported local runtime (Docker Compose)
 
 ```bash
-# 1. enter devenv
-devenv shell
+# 1. add the compose settings to your local .env
+cp .env.example .env
 
-# 2. scan a mailbox and generate reports
-scan-mailbox <mailbox>
-#   e.g. scan-mailbox gabriel.hangel
+# If you already use .env for local secrets, merge the MRIJA_* keys instead of overwriting it.
 
-# 3. find outputs in reports/
-ls reports/
+# 2. start the supported stack
+docker compose up -d --build
+
+# 3. run migrations / imports / QA through the app container
+docker compose run --rm app php web/src/cli/migrate.php
+docker compose run --rm app php web/src/cli/import_archive.php --sqlite /app/data/index/mail_index.sqlite
+docker compose run --rm app bash docker/qa-archive-docker.sh
+
+# 4. open the app
+xdg-open http://localhost:${MRIJA_WEB_PORT:-8080}
+
+# 5. stop everything
+docker compose down
 ```
+
+### Docker notes
+
+- The database is only exposed inside the Compose network now; the web UI stays on `http://localhost:${MRIJA_WEB_PORT:-8080}`.
+- Credentials and password hashes come from `.env`; keep `.env` local and never commit it.
+- Generate login password hashes with:
+
+```bash
+docker compose run --rm app php -r "echo password_hash('your-password', PASSWORD_BCRYPT), PHP_EOL;"
+```
+
+## Optional developer workflow (`devenv`)
+
+`devenv` still exists for repo contributors, but it is no longer the canonical way to run the system. Use it only when you specifically need the Nix shell or local developer commands.
+
+If you use `sync-all` against the real hosting server, configure SSH keys first.
+Do not store hosting passwords in `.env`; password-based SSH automation is intentionally unsupported.
 
 ## Workflow for each mailbox
 
+The historical `scan-mailbox` helper belongs to the optional `devenv` workflow.
+For the supported Docker runtime, use the explicit container commands shown in the setup section (`migrate.php`, `import_archive.php`, `docker/qa-archive-docker.sh`).
+
 ```bash
-# scan mailbox — rsyncs maildir locally, generates PDF + manifest + decisions
+# devenv-only helper — kept for contributors, not the supported runtime
 scan-mailbox <mailbox>
 
 # outputs written to reports/
@@ -48,10 +78,10 @@ This produces a local Maildir in the same structure the pipeline expects.
 
 ### Prerequisites
 
-1. Install the optional `imap-tools` dependency (already in devenv venv):
-   ```bash
-   pip install imap-tools>=1.6
-   ```
+IMAP ingestion is not part of the supported Docker Compose runtime today.
+Treat this section as developer-only background information until a container-first command is added and verified.
+
+1. Install the optional `imap-tools` dependency in your developer environment if you need the legacy IMAP workflow.
 2. Set credentials as **environment variables** (never CLI args or files):
    ```bash
    export IMAP_SERVER=imap.example.com
@@ -62,11 +92,8 @@ This produces a local Maildir in the same structure the pipeline expects.
 ### Fetch a mailbox via IMAP
 
 ```bash
-# Fetch INBOX of a mailbox (all messages)
-devenv shell -- fetch-imap <mailbox> $DEVENV_ROOT/data
-
-# Fetch only messages since a specific date
-devenv shell -- fetch-imap <mailbox> $DEVENV_ROOT/data --since 2024-01-01
+# No supported Docker command yet.
+# If you need IMAP ingestion, use the optional developer tooling only.
 ```
 
 The command is **read-only**: it never moves, deletes, or flags messages on the server.
@@ -83,18 +110,13 @@ data/imap/<mailbox>/INBOX/Maildir/
 ### Run the pipeline on the fetched Maildir
 
 ```bash
-# Scan the fetched IMAP Maildir and generate report artifacts
-PYTHONPATH=src python -m maildir_report \
-  data/imap/<mailbox>/INBOX/Maildir \
-  reports/
+# No supported Docker shortcut is documented for this flow yet.
+# Use the optional developer tooling if you need to continue from a fetched IMAP Maildir.
 ```
 
 Or use the `--source imap` shorthand on the main CLI:
 ```bash
-IMAP_SERVER=imap.example.com IMAP_USER=you@example.com IMAP_PASS=secret \
-  PYTHONPATH=src python -m maildir_report \
-    data/ reports/ \
-    --source imap --imap-mailbox <mailbox>
+# Legacy/developer-only workflow; not part of the supported Docker runtime.
 ```
 
 ### Idempotency
@@ -120,6 +142,7 @@ Re-running `fetch-imap` with the same credentials is safe:
 
 - Reports are written to `reports/` — do NOT commit that directory to git
 - Do NOT commit `logs/` to git
+- `src/tui/main.py` currently exists but is not a supported runtime path; treat it as experimental until it is validated and documented.
 
 
 ---
@@ -128,7 +151,9 @@ Re-running `fetch-imap` with the same credentials is safe:
 
 ### Project Overview
 
-Mailbox Review App is a self-contained PHP 8.3 + MySQL web application for reviewing email cleanup decisions. A Python pipeline scans a Maildir, generates a PDF report and a decisions CSV; these are imported into MySQL. Coworkers then log in to review each email (keep/delete/unsure), and an admin exports the reviewed CSV to apply deletions offline. No Composer, no framework — designed to be uploaded to shared hosting via FTP.
+Mailbox Review App is a self-contained PHP 8.3 + MySQL web application for reviewing email cleanup decisions. A Python pipeline scans a Maildir, generates a PDF report and a decisions CSV; these are imported into MySQL. Coworkers then log in to review each email (keep/delete/unsure), and an admin exports the reviewed CSV to apply deletions offline. No Composer, no framework.
+
+For local use and review, Docker Compose is the supported runtime. The FTP/shared-hosting flow below is a deployment variant for the PHP web app, not the main local execution path.
 
 ### Directory Layout
 
@@ -177,11 +202,7 @@ mrijaPageClean/
    ```
    (or use the export button in the admin UI — logged in as admin).
 4. Save the CSV file. The columns include: `stable_id`, `decision`, `note`, `updated_by`.
-5. Apply decisions locally with:
-   ```bash
-   devenv shell -- apply-decisions <mailbox> <exported.csv>
-   ```
-   This quarantines files marked `delete`; it does NOT permanently delete them.
+5. Apply decisions with your offline maintenance tooling. This step is outside the supported Docker runtime documented above.
 
 ### FTP Deploy Steps
 
@@ -195,6 +216,7 @@ These steps upload only the webroot to a shared hosting server.
    mirror -R web/public/ public_html/
    ```
    Or drag-and-drop via a GUI FTP client (FileZilla etc.).
+   Keep the hosting password out of repo-local `.env` files; for shell-based sync/deploy helpers, prefer SSH keys.
 3. **Upload `web/config/local.php`** to `<webroot>/../config/local.php` (one level above webroot, outside the served directory).
 4. **Upload `web/src/`** to `<webroot>/../src/` (not inside webroot).
 5. **Run migrations** once on the server database:
@@ -233,4 +255,3 @@ touch web/maintenance.flag
 rm web/maintenance.flag
 ```
 The app returns HTTP 503 with `Retry-After: 3600` while the flag exists.
-

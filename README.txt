@@ -10,6 +10,8 @@ HOW TO START
    If Docker Desktop is not installed, the app will download and
    install it automatically (one-time, ~600 MB, takes 5-10 minutes).
 
+   The launcher uses Docker Compose internally. That is the supported runtime.
+
 2. The app will start and show the email search interface.
    This takes about 30 seconds on first launch.
 

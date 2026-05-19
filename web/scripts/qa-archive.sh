@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # web/scripts/qa-archive.sh — End-to-end QA for the mailbox archive pipeline.
+# Dev-only helper for the optional devenv workflow.
 #
 # Creates a synthetic mailbox, runs: rsync-skip → extract → index → import
 # and verifies each step's output.
