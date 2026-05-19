@@ -11,7 +11,8 @@
 
 A complete local email archive pipeline for mrija.org mailboxes:
 
-1. **`sync-all`** — rsync all mailboxes from `mrija_org@s16.thehost.com.ua:email/mrija.org/`  
+1. **`sync-all`** — rsync all mailboxes from `mrija_org@s16.thehost.com.ua:email/mrija.org/`
+   Real server sync now requires SSH keys. Password-in-`.env` support was removed on purpose.
    Flags: `--mailboxes-file`, `--src-base` (local path for testing), `--skip-import`, `--mailbox`
 
 2. **Parser** (`src/maildir_report/parser.py`) — now extracts `cc_addrs` and `body_text` per email
@@ -71,7 +72,7 @@ sync-all --mailboxes-file tests/fixtures/mailboxes.txt \
          --src-base tests/fixtures/src \
          --skip-import
 
-# Real sync (requires SSH to thehost.com.ua)
+# Real sync (requires SSH key auth to thehost.com.ua)
 sync-all --mailboxes-file data/mailboxes.txt
 
 # Search

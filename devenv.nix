@@ -48,7 +48,6 @@
     jq
     curl
     rsync
-    sshpass
     tex-fmt
     clamav   # malware scanning for mail attachments
   ];
@@ -212,6 +211,8 @@
         echo "    4. import into MariaDB (archive_emails + archive_attachments)"
         echo ""
         echo "  Remote source: mrija_org@s16.thehost.com.ua:email/mrija.org/<mailbox>/.maildir/"
+        echo "  Real server sync requires SSH key auth (ssh-agent or ~/.ssh/config)."
+        echo "  Password-in-.env support was removed on purpose."
         echo ""
         echo "Options:"
         echo "  --mailbox <name>   Sync only this mailbox (overrides mailboxes.txt)"
@@ -289,19 +290,11 @@
         if [ "$SKIP_RSYNC" -eq 0 ]; then
           mkdir -p "$MAILDIR_DST"
           echo "    rsync from $REMOTE_BASE/$MAILBOX/.maildir/..."
-          if [ -n "''${MRIJA_SSH_PASS:-}" ]; then
-            SSHPASS="''${MRIJA_SSH_PASS}" sshpass -e rsync -az --info=progress2 \
-              -e ssh \
-              "$REMOTE_BASE/$MAILBOX/.maildir/" \
-              "$MAILDIR_DST/" \
-              || { echo "ERROR: rsync failed for $MAILBOX"; exit 1; }
-          else
-            rsync -az --info=progress2 \
-              -e ssh \
-              "$REMOTE_BASE/$MAILBOX/.maildir/" \
-              "$MAILDIR_DST/" \
-              || { echo "ERROR: rsync failed for $MAILBOX"; exit 1; }
-          fi
+          rsync -az --info=progress2 \
+            -e ssh \
+            "$REMOTE_BASE/$MAILBOX/.maildir/" \
+            "$MAILDIR_DST/" \
+            || { echo "ERROR: rsync failed for $MAILBOX (configure SSH keys for $REMOTE_BASE)"; exit 1; }
           echo "    rsync done."
         else
           echo "    [skip-rsync] skipping rsync for $MAILBOX"
