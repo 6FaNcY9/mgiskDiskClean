@@ -17,6 +17,7 @@ return [
 
     'coworker_password_hash' => $_ENV['COWORKER_PASSWORD_HASH'] ?? getenv('COWORKER_PASSWORD_HASH') ?: '',
     'admin_password_hash'    => $_ENV['ADMIN_PASSWORD_HASH'] ?? getenv('ADMIN_PASSWORD_HASH') ?: '',
+    'vt_api_key'             => $_ENV['VT_API_KEY'] ?? getenv('VT_API_KEY') ?: '',
 
     'session' => [
         'name'     => 'mailreview_session',
