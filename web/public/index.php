@@ -217,6 +217,20 @@ if ($selectedId !== '' && $selMailbox !== '') {
     }
 }
 
+// Load VT cache status for this email's attachments (keyed by sha256)
+$vtStatuses = [];
+if ($email && !empty($email['attachments'])) {
+    $hashes = array_column($email['attachments'], 'sha256');
+    $placeholders = implode(',', array_fill(0, count($hashes), '?'));
+    $vtStmt = $pdo->prepare(
+        "SELECT sha256, status, positives FROM vt_cache WHERE sha256 IN ($placeholders)"
+    );
+    $vtStmt->execute($hashes);
+    foreach ($vtStmt->fetchAll() as $vr) {
+        $vtStatuses[$vr['sha256']] = $vr;
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
@@ -258,351 +272,486 @@ function buildUrl(array $overrides = []): string {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mrija Archive</title>
+<script>
+/* Anti-flicker: apply stored theme before first paint */
+(function(){
+  var a=localStorage.getItem('mrija-accent')||'';
+  var m=localStorage.getItem('mrija-mode')||'dark';
+  var h=document.documentElement;
+  if(a)h.setAttribute('data-accent',a);
+  if(m==='light')h.setAttribute('data-mode','light');
+})();
+</script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#111827;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-1);color:var(--text-1);height:100vh;display:flex;flex-direction:column}
 
-/* Toolbar */
-#toolbar{background:#1e1b4b;padding:.45rem .8rem;display:flex;align-items:center;gap:.6rem;border-bottom:1px solid #312e81;flex-shrink:0;flex-wrap:wrap}
-.logo-btn{background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.35rem;padding:.2rem .45rem;border-radius:6px;color:#e0e7ff;font-weight:600;font-size:.88rem;white-space:nowrap;position:relative}
-.logo-btn:hover{background:#312e81}
-.logo-btn .caret{font-size:.55rem;opacity:.5}
+/* ── Theme variables ─────────────────────────────────────────────────────── */
+:root{
+  --bg-0:#0d0d0d;--bg-1:#111111;--bg-2:#1a1a1a;--bg-3:#222222;
+  --border:#2a2a2a;
+  --text-1:#e8e8e8;--text-2:#888888;--text-3:#444444;
+  --accent:#c0c0c0;--accent-bg:rgba(192,192,192,.08);--accent-border:rgba(192,192,192,.22);
+  --danger:#c0606a;--warn:#d4900a;--ok:#6a9f6a;
+}
+[data-mode="light"]{
+  --bg-0:#ebebeb;--bg-1:#f5f5f5;--bg-2:#ffffff;--bg-3:#e0e0e0;
+  --border:#d4d4d4;
+  --text-1:#1a1a1a;--text-2:#666666;--text-3:#aaaaaa;
+  --accent:#555555;--accent-bg:rgba(85,85,85,.07);--accent-border:rgba(85,85,85,.22);
+}
+[data-accent="blue"]  {--accent:#4a90d9;--accent-bg:rgba(74,144,217,.1);--accent-border:rgba(74,144,217,.3)}
+[data-accent="teal"]  {--accent:#2a9d8f;--accent-bg:rgba(42,157,143,.1);--accent-border:rgba(42,157,143,.3)}
+[data-accent="amber"] {--accent:#d4900a;--accent-bg:rgba(212,144,10,.1);--accent-border:rgba(212,144,10,.3)}
+[data-accent="sage"]  {--accent:#6a9f6a;--accent-bg:rgba(106,159,106,.1);--accent-border:rgba(106,159,106,.3)}
+[data-accent="rose"]  {--accent:#c0606a;--accent-bg:rgba(192,96,106,.1);--accent-border:rgba(192,96,106,.3)}
 
-/* Mailbox dropdown */
-.mb-dropdown{position:absolute;top:calc(100% + 4px);left:0;background:#1e1b4b;border:1px solid #4f46e5;border-radius:8px;min-width:220px;max-height:380px;overflow-y:auto;z-index:200;box-shadow:0 8px 28px rgba(0,0,0,.6)}
-.mb-dropdown a{display:flex;justify-content:space-between;align-items:center;padding:.38rem .8rem;font-size:.78rem;color:#c7d2fe;text-decoration:none;gap:.5rem}
-.mb-dropdown a:hover,.mb-dropdown a.cur{background:#312e81;color:#e0e7ff}
-.mb-dropdown .mb-sep{border-top:1px solid #312e81;margin:.2rem 0}
-.mb-dropdown .mb-meta{color:#4b5563;font-size:.65rem;white-space:nowrap}
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+#app{display:flex;flex:1;overflow:hidden}
 
-/* Search form */
-#search-form{flex:1;display:flex;gap:.35rem;align-items:center;min-width:0}
-#q{flex:1;background:#111827;border:1px solid #4f46e5;border-radius:6px;padding:.32rem .7rem;color:#e0e7ff;font-size:.83rem;outline:none;min-width:0}
-#q:focus{border-color:#818cf8}
-.date-input{background:#111827;border:1px solid #374151;color:#9ca3af;border-radius:6px;padding:.28rem .45rem;font-size:.73rem;width:112px}
-.date-input:focus{outline:none;border-color:#4f46e5;color:#e0e7ff}
-.date-sep{color:#4b5563;font-size:.73rem}
-select.toolbar-sel{background:#111827;border:1px solid #374151;color:#9ca3af;border-radius:6px;padding:.28rem .45rem;font-size:.73rem;cursor:pointer}
-select.toolbar-sel:focus{outline:none;border-color:#4f46e5}
-#search-btn{background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:.32rem .9rem;font-size:.78rem;cursor:pointer;white-space:nowrap}
-#search-btn:hover{background:#4338ca}
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar{width:185px;flex-shrink:0;background:var(--bg-0);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-title{padding:.75rem .9rem .55rem;font-size:.82rem;font-weight:700;color:var(--text-1);letter-spacing:.02em;border-bottom:1px solid var(--border);flex-shrink:0}
+.mb-list{flex:1;overflow-y:auto;padding:.35rem 0}
+.mb-item{display:block;padding:.36rem .9rem;text-decoration:none;color:var(--text-2);font-size:.77rem;border-left:2px solid transparent;transition:all .1s}
+.mb-item:hover{background:var(--bg-2);color:var(--text-1)}
+.mb-item.cur{background:var(--accent-bg);border-left-color:var(--accent);color:var(--accent)}
+.mb-name{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mb-meta{display:block;font-size:.63rem;color:var(--text-3);margin-top:.06rem}
+.mb-item.cur .mb-meta{color:var(--accent);opacity:.65}
+.mb-sep{border-top:1px solid var(--border);margin:.3rem 0}
+.sb-foot{border-top:1px solid var(--border);padding:.45rem .9rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.sb-stats{font-size:.62rem;color:var(--text-3)}
+.theme-btn{background:none;border:1px solid var(--border);border-radius:4px;padding:.18rem .3rem;font-size:.78rem;cursor:pointer;color:var(--text-3);transition:all .1s;line-height:1}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-/* Toolbar right-side buttons */
-.tb-btn{background:transparent;color:#9ca3af;border:1px solid #374151;border-radius:5px;padding:.25rem .55rem;font-size:.72rem;cursor:pointer;text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;gap:.25rem}
-.tb-btn:hover{color:#e0e7ff;border-color:#6366f1}
-.tb-btn.active{background:#312e81;color:#a5b4fc;border-color:#4f46e5}
-.stop-btn{color:#9ca3af;border-color:#374151}
-.stop-btn:hover{color:#f87171;border-color:#f87171}
-
-/* Filter badges */
-.badges{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap}
-.badge{background:#1f2937;color:#a5b4fc;border:1px solid #374151;border-radius:4px;padding:.12rem .4rem;font-size:.67rem;display:inline-flex;align-items:center;gap:.25rem}
-.badge a{color:#6366f1;text-decoration:none;font-size:.75rem;line-height:1}
-.badge a:hover{color:#f87171}
-
-/* Main layout */
-#main{display:flex;flex:1;overflow:hidden}
-
-/* Results list */
-#results{width:40%;border-right:1px solid #1f2937;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
-.result{padding:.55rem .75rem;border-bottom:1px solid #1f2937;cursor:pointer;border-left:3px solid transparent;flex-shrink:0}
-.result:hover{background:#1a2234}
-.result.active{background:#1e1b4b;border-left-color:#6366f1}
-.result .r-subj{color:#c7d2fe;font-size:.77rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.result.active .r-subj{color:#e0e7ff}
-.result .r-meta{color:#6b7280;font-size:.66rem;margin-top:.12rem;display:flex;gap:.35rem;align-items:center;flex-wrap:wrap}
-.mb-tag{background:#1f2937;color:#6366f1;border-radius:3px;padding:.04rem .28rem;font-size:.62rem}
-.att-badge{color:#f59e0b;font-size:.65rem}
-.result .r-preview{color:#4b5563;font-size:.64rem;margin-top:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.result.active .r-preview{color:#6b7280}
-mark{background:#3b2f00;color:#fcd34d;border-radius:2px;padding:0 1px}
-
-.result-count{padding:.32rem .75rem;color:#4b5563;font-size:.66rem;border-bottom:1px solid #1f2937;flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
-
-/* Pagination */
-.pagination{padding:.45rem;display:flex;align-items:center;justify-content:center;gap:.3rem;border-top:1px solid #1f2937;flex-shrink:0;margin-top:auto}
-.pagination a,.pagination span{padding:.18rem .5rem;border-radius:4px;font-size:.7rem;text-decoration:none;color:#9ca3af;border:1px solid #374151}
-.pagination a:hover{background:#1f2937;color:#e0e7ff}
-.pagination .cur{background:#4f46e5;color:#fff;border-color:#4f46e5}
+/* ── Middle panel ────────────────────────────────────────────────────────── */
+#panel-mid{width:305px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--bg-1)}
+.search-wrap{padding:.45rem .55rem;border-bottom:1px solid var(--border);flex-shrink:0}
+.search-row{display:flex;gap:.3rem;align-items:center}
+#q{flex:1;background:var(--bg-2);border:1px solid var(--border);border-radius:5px;padding:.3rem .6rem;color:var(--text-1);font-size:.8rem;outline:none;min-width:0}
+#q:focus{border-color:var(--accent)}
+#q::placeholder{color:var(--text-3)}
+.search-btn{background:var(--accent);color:var(--bg-0);border:none;border-radius:5px;padding:.3rem .6rem;font-size:.75rem;cursor:pointer;font-weight:700;white-space:nowrap}
+.search-btn:hover{opacity:.85}
+.filter-row{display:flex;gap:.28rem;align-items:center;padding:.3rem .55rem;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.fi{background:var(--bg-2);border:1px solid var(--border);color:var(--text-2);border-radius:4px;padding:.18rem .35rem;font-size:.69rem;cursor:pointer}
+.fi:focus{outline:none;border-color:var(--accent);color:var(--text-1)}
+.date-sep{color:var(--text-3);font-size:.69rem}
+.att-toggle{background:none;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.69rem;color:var(--text-2);cursor:pointer;text-decoration:none;white-space:nowrap}
+.att-toggle.on{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent)}
+.list-head{padding:.24rem .7rem;font-size:.63rem;color:var(--text-3);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.list-head a{color:var(--text-3);text-decoration:none}
+.list-head a:hover{color:var(--accent)}
+.email-list{flex:1;overflow-y:auto}
+.erow{padding:.46rem .72rem;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:background .08s}
+.erow:hover{background:var(--bg-2)}
+.erow.cur{background:var(--accent-bg);border-left-color:var(--accent)}
+.e-subj{font-size:.77rem;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erow.cur .e-subj{color:var(--accent)}
+.e-meta{font-size:.65rem;color:var(--text-2);margin-top:.1rem;display:flex;gap:.3rem;align-items:center;flex-wrap:wrap}
+.e-prev{font-size:.63rem;color:var(--text-3);margin-top:.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-badge{color:var(--warn);font-size:.62rem}
+.mb-tag{background:var(--bg-3);color:var(--text-3);border-radius:3px;padding:.02rem .25rem;font-size:.6rem}
+mark{background:rgba(212,144,10,.18);color:var(--text-1);border-radius:2px;padding:0 1px}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-3);font-size:.8rem;gap:.45rem;padding:2rem;text-align:center}
+.empty-state .icon{font-size:2rem}
+.pagination{padding:.3rem;display:flex;align-items:center;justify-content:center;gap:.22rem;border-top:1px solid var(--border);flex-shrink:0}
+.pagination a,.pagination span{padding:.14rem .42rem;border-radius:3px;font-size:.68rem;text-decoration:none;color:var(--text-2);border:1px solid var(--border)}
+.pagination a:hover{background:var(--bg-2);color:var(--text-1)}
+.pagination .cur{background:var(--accent);color:var(--bg-0);border-color:var(--accent);font-weight:700}
 .pagination .dis{opacity:.3;pointer-events:none}
 
-.empty-state{padding:3rem;text-align:center;color:#374151;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.empty-state .icon{font-size:2.2rem;margin-bottom:.6rem}
+/* ── Detail panel ────────────────────────────────────────────────────────── */
+#panel-detail{flex:1;overflow-y:auto;background:var(--bg-1);display:flex;flex-direction:column}
+.d-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-3);gap:.45rem;font-size:.8rem}
+.d-empty .icon{font-size:2rem}
+kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padding:.08rem .28rem;font-size:.62rem;color:var(--text-2)}
+.d-content{padding:1rem 1.25rem}
+.d-subject{font-size:1rem;font-weight:700;color:var(--text-1);margin-bottom:.7rem;line-height:1.35}
+.d-meta{display:grid;grid-template-columns:auto 1fr;gap:.15rem .6rem;font-size:.73rem;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border)}
+.d-lbl{color:var(--accent);white-space:nowrap;font-size:.67rem;text-transform:uppercase;letter-spacing:.04em}
+.d-val{color:var(--text-2);word-break:break-word}
+.d-body{color:var(--text-1);font-size:.8rem;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 
-/* Email detail */
-#detail{flex:1;padding:1.1rem 1.3rem;overflow-y:auto}
-.d-subject{color:#e0e7ff;font-size:.98rem;font-weight:600;margin-bottom:.65rem;line-height:1.35}
-.d-meta{display:grid;grid-template-columns:auto 1fr;gap:.18rem .7rem;font-size:.74rem;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid #1f2937}
-.d-meta .lbl{color:#6366f1;white-space:nowrap}
-.d-meta .val{color:#9ca3af;word-break:break-word}
-.d-body{color:#d1d5db;font-size:.81rem;line-height:1.68;white-space:pre-wrap;word-break:break-word}
-.att-section{margin-top:1.1rem;padding-top:.8rem;border-top:1px solid #1f2937}
-.att-section-title{color:#6b7280;font-size:.7rem;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em}
-.att-list{display:flex;flex-wrap:wrap;gap:.35rem}
-.att{display:inline-flex;align-items:center;gap:.3rem;background:#1f2937;border:1px solid #374151;border-radius:5px;padding:.28rem .65rem;font-size:.71rem;color:#9ca3af;text-decoration:none;transition:all .15s}
-.att:hover{background:#312e81;color:#c7d2fe;border-color:#4f46e5}
-.att .att-size{color:#4b5563;font-size:.63rem}
+/* ── Attachments ─────────────────────────────────────────────────────────── */
+.att-section{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border)}
+.att-sec-title{font-size:.67rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.55rem}
+.att-block{background:var(--bg-2);border:1px solid var(--border);border-radius:6px;margin-bottom:.45rem;overflow:hidden}
+.att-hdr{display:flex;align-items:center;gap:.45rem;padding:.4rem .65rem;cursor:pointer;transition:background .08s;font-size:.77rem}
+.att-hdr:hover{background:var(--bg-3)}
+.att-fname{flex:1;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-fsize{font-size:.64rem;color:var(--text-3);white-space:nowrap}
+.vt-badge{font-size:.62rem;padding:.08rem .3rem;border-radius:3px;white-space:nowrap;font-weight:600}
+.vt-clean{background:rgba(106,159,106,.13);color:#6a9f6a;border:1px solid rgba(106,159,106,.28)}
+.vt-infected{background:rgba(192,96,106,.13);color:#c0606a;border:1px solid rgba(192,96,106,.28)}
+.vt-pending{background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
+.vt-none{color:var(--text-3);font-size:.62rem}
+.att-dl{background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);border-radius:4px;padding:.16rem .48rem;font-size:.7rem;text-decoration:none;white-space:nowrap;transition:opacity .1s}
+.att-dl:hover{opacity:.8}
+.att-blocked{background:rgba(192,96,106,.1);border-color:rgba(192,96,106,.28);color:#c0606a;border-radius:4px;padding:.16rem .48rem;font-size:.7rem;cursor:not-allowed}
+.att-preview{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.att-preview.open{max-height:520px}
+.att-preview img{width:100%;max-height:300px;object-fit:contain;display:block;padding:.5rem;background:var(--bg-0)}
+.att-preview iframe{width:100%;height:420px;border:none;display:block;background:var(--bg-0)}
 
-.d-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#374151;font-size:.83rem;gap:.5rem}
-.d-placeholder .keys{font-size:.68rem;color:#1f2937;margin-top:.5rem}
-kbd{background:#1f2937;border:1px solid #374151;border-radius:3px;padding:.1rem .3rem;font-size:.65rem;color:#6b7280}
+/* ── Theme popover ───────────────────────────────────────────────────────── */
+#theme-pop{position:fixed;background:var(--bg-0);border:1px solid var(--border);border-radius:8px;padding:.65rem .75rem;box-shadow:0 8px 28px rgba(0,0,0,.6);z-index:1000;display:none;min-width:155px}
+#theme-pop.open{display:block}
+.tp-label{font-size:.63rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.tp-swatches{display:flex;gap:.32rem;margin-bottom:.55rem}
+.tp-sw{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s,border-color .1s;flex-shrink:0}
+.tp-sw:hover{transform:scale(1.18)}
+.tp-sw.on{border-color:var(--text-1)}
+.tp-mode{display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--text-2);cursor:pointer}
+.mode-toggle{width:32px;height:18px;background:var(--bg-3);border-radius:9px;position:relative;border:1px solid var(--border);flex-shrink:0;transition:background .15s}
+.mode-toggle::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--text-2);border-radius:50%;transition:transform .15s,background .15s}
+[data-mode="light"] .mode-toggle{background:var(--accent-bg)}
+[data-mode="light"] .mode-toggle::after{transform:translateX(14px);background:var(--accent)}
 
-/* Status bar */
-#statusbar{background:#0f172a;border-top:1px solid #1f2937;padding:.22rem 1rem;display:flex;justify-content:space-between;font-size:.63rem;color:#374151;flex-shrink:0}
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+#statusbar{background:var(--bg-0);border-top:1px solid var(--border);padding:.18rem .9rem;font-size:.62rem;color:var(--text-3);display:flex;justify-content:space-between;flex-shrink:0}
 </style>
 </head>
 <body>
+<div id="app">
 
-<div id="toolbar">
-  <!-- Logo / Mailbox-Picker -->
-  <div style="position:relative;flex-shrink:0">
-    <button class="logo-btn" id="logo-btn" onclick="toggleDrop(event)">
-      📧 Mrija Archive <span class="caret">▼</span>
-    </button>
-    <div class="mb-dropdown" id="mb-dropdown" style="display:none">
-      <a class="<?= $mailbox === '' ? 'cur' : '' ?>"
-         href="<?= esc(buildUrl(['mailbox'=>'','page'=>'1','id'=>'','smb'=>''])) ?>">
-        <span>Alle Postfächer</span>
-        <span class="mb-meta"><?= number_format($total) ?></span>
+  <!-- ── LEFT SIDEBAR ──────────────────────────────────────────────────── -->
+  <div id="sidebar">
+    <div class="sb-title">📧 Mrija Archive</div>
+
+    <div class="mb-list">
+      <?php
+        // "All mailboxes" entry
+        $allUrl = buildUrl(['mailbox'=>'','page'=>'1','id'=>'','smb'=>'']);
+      ?>
+      <a class="mb-item <?= $mailbox === '' ? 'cur' : '' ?>"
+         href="<?= esc($allUrl) ?>">
+        <span class="mb-name">Alle Postfächer</span>
+        <span class="mb-meta"><?= number_format($total) ?> E-Mails</span>
       </a>
       <div class="mb-sep"></div>
       <?php foreach ($mailboxStats as $ms):
         $mb    = $ms['mailbox'];
         $cnt   = (int)$ms['email_count'];
         $bytes = (int)$ms['total_bytes'];
+        $mbUrl = buildUrl(['mailbox'=>$mb,'page'=>'1','id'=>'','smb'=>'']);
       ?>
-        <a href="<?= esc(buildUrl(['mailbox'=>$mb,'page'=>'1','id'=>'','smb'=>''])) ?>"
-           class="<?= $mailbox === $mb ? 'cur' : '' ?>">
-          <span><?= esc($mb) ?></span>
+        <a class="mb-item <?= $mailbox === $mb ? 'cur' : '' ?>"
+           href="<?= esc($mbUrl) ?>">
+          <span class="mb-name"><?= esc($mb) ?></span>
           <span class="mb-meta"><?= number_format($cnt) ?> · <?= fmtBytes($bytes) ?></span>
         </a>
       <?php endforeach ?>
     </div>
-  </div>
 
-  <!-- Suchformular -->
-  <form id="search-form" method="get" action="" style="flex:1;display:flex;gap:.35rem;align-items:center;min-width:0">
-    <?php if ($mailbox !== ''): ?>
-      <input type="hidden" name="mailbox" value="<?= esc($mailbox) ?>">
-    <?php endif ?>
-    <input id="q" name="q" type="text" value="<?= esc($q) ?>"
-           placeholder="Suchen — Betreff, Absender, Text…" autocomplete="off">
-    <input type="date" name="date_from" class="date-input" value="<?= esc($dateFrom) ?>" title="Von Datum">
-    <span class="date-sep">–</span>
-    <input type="date" name="date_to"   class="date-input" value="<?= esc($dateTo) ?>"   title="Bis Datum">
-    <select name="sort" class="toolbar-sel" onchange="this.form.submit()">
-      <?php foreach ($sortOptions as $key => $opt): ?>
-        <option value="<?= esc($key) ?>" <?= $sort === $key ? 'selected' : '' ?>><?= esc($opt['label']) ?></option>
-      <?php endforeach ?>
-    </select>
-    <button id="search-btn" type="submit">Suchen</button>
-  </form>
-
-  <!-- Filter-Buttons -->
-  <a class="tb-btn <?= $hasAtt ? 'active' : '' ?>"
-     href="<?= esc(buildUrl(['has_att' => $hasAtt ? '' : '1', 'page' => '1'])) ?>"
-     title="Nur E-Mails mit Anhängen">
-    📎 Anhänge
-  </a>
-
-  <?php if ($totalFound > 0): ?>
-    <a class="tb-btn" href="<?= esc(buildUrl(['export' => 'csv', 'page' => ''])) ?>"
-       title="Aktuelle Ergebnisse als CSV exportieren (<?= number_format($totalFound) ?> Zeilen)">
-      ⬇ CSV
-    </a>
-  <?php endif ?>
-
-  <!-- Aktive Filter-Badges -->
-  <div class="badges">
-    <?php if ($mailbox !== ''): ?>
-      <span class="badge">📂 <?= esc($mailbox) ?> <a href="<?= esc(buildUrl(['mailbox'=>'','page'=>'1'])) ?>">✕</a></span>
-    <?php endif ?>
-    <?php if ($dateFrom !== '' || $dateTo !== ''): ?>
-      <span class="badge">
-        📅 <?= $dateFrom ?: '…' ?> – <?= $dateTo ?: '…' ?>
-        <a href="<?= esc(buildUrl(['date_from'=>'','date_to'=>'','page'=>'1'])) ?>">✕</a>
+    <div class="sb-foot">
+      <span class="sb-stats">
+        <?= number_format($total) ?> gesamt<br>
+        <span title="Letzter Import"><?= esc(substr((string)$lastImport,0,10)) ?></span>
       </span>
-    <?php endif ?>
-    <?php if ($hasAtt): ?>
-      <span class="badge">📎 nur mit Anhang <a href="<?= esc(buildUrl(['has_att'=>'','page'=>'1'])) ?>">✕</a></span>
-    <?php endif ?>
-    <?php if ($q !== '' || $dateFrom !== '' || $dateTo !== '' || $hasAtt): ?>
-      <a class="tb-btn" href="<?= esc(buildUrl(['q'=>'','date_from'=>'','date_to'=>'','has_att'=>'','page'=>'1','id'=>'','smb'=>''])) ?>">✕ Alle Filter</a>
-    <?php endif ?>
+      <button class="theme-btn" id="theme-btn" onclick="toggleThemePop(event)" title="Farbschema">🎨</button>
+    </div>
   </div>
 
-  <button class="tb-btn stop-btn" onclick="if(window.pywebview){window.pywebview.api.stop_archive()}else{alert('Launcher verwenden.')}">■ Stop</button>
-</div>
-
-<div id="main">
-  <div id="results">
-    <?php if (empty($results) && $totalFound === 0): ?>
-      <div class="empty-state">
-        <div class="icon">📭</div>
-        <div><?= $q !== '' ? 'Keine Ergebnisse für <em>' . esc($q) . '</em>' : 'Keine E-Mails gefunden' ?></div>
-      </div>
-    <?php else: ?>
-      <!-- Ergebnis-Kopf -->
-      <div class="result-count">
-        <span>
-          <?php
-            $from = $offset + 1;
-            $to   = min($offset + count($results), $totalFound);
-            echo number_format($from) . '–' . number_format($to) . ' von ' . number_format($totalFound);
-            if ($q !== '') echo ' für <em>' . esc($q) . '</em>';
-          ?>
-        </span>
-      </div>
-
-      <!-- Ergebnisliste -->
-      <?php foreach ($results as $idx => $r):
-        $isActive = ($r['stable_id'] === $selectedId && $r['mailbox'] === $selMailbox);
-        $link = buildUrl(['id' => $r['stable_id'], 'smb' => $r['mailbox'], 'page' => (string)$page]);
-        $attCount = (int)$r['att_count'];
-      ?>
-      <div class="result <?= $isActive ? 'active' : '' ?>"
-           data-href="<?= esc($link) ?>"
-           data-idx="<?= $idx ?>"
-           onclick="window.location=this.dataset.href">
-        <div class="r-subj"><?= highlight(esc($r['subject'] ?: '(kein Betreff)'), $q) ?></div>
-        <div class="r-meta">
-          <span><?= highlight(esc($r['from_addr']), $q) ?></span>
-          <span>·</span>
-          <span><?= esc(substr($r['date'], 0, 10)) ?></span>
-          <?php if ($mailbox === ''): ?>
-            <span class="mb-tag"><?= esc($r['mailbox']) ?></span>
-          <?php endif ?>
-          <?php if ($attCount > 0): ?>
-            <span class="att-badge">📎<?= $attCount > 1 ? " $attCount" : '' ?></span>
-          <?php endif ?>
-        </div>
-        <div class="r-preview"><?= highlight(esc($r['preview']), $q) ?></div>
-      </div>
-      <?php endforeach ?>
-
-      <!-- Pagination -->
-      <?php if ($totalPages > 1): ?>
-        <div class="pagination">
-          <?php if ($page > 1): ?>
-            <a href="<?= esc(buildUrl(['page'=>'1'])) ?>">«</a>
-            <a href="<?= esc(buildUrl(['page'=>(string)($page-1)])) ?>">‹</a>
-          <?php else: ?>
-            <span class="dis">«</span><span class="dis">‹</span>
-          <?php endif ?>
-          <?php
-            $s = max(1, $page-2); $e = min($totalPages, $page+2);
-            if ($s > 1) echo '<span>…</span>';
-            for ($i = $s; $i <= $e; $i++):
-          ?>
-            <?php if ($i === $page): ?>
-              <span class="cur"><?= $i ?></span>
-            <?php else: ?>
-              <a href="<?= esc(buildUrl(['page'=>(string)$i])) ?>"><?= $i ?></a>
-            <?php endif ?>
-          <?php endfor; if ($e < $totalPages) echo '<span>…</span>'; ?>
-          <?php if ($page < $totalPages): ?>
-            <a href="<?= esc(buildUrl(['page'=>(string)($page+1)])) ?>">›</a>
-            <a href="<?= esc(buildUrl(['page'=>(string)$totalPages])) ?>">»</a>
-          <?php else: ?>
-            <span class="dis">›</span><span class="dis">»</span>
-          <?php endif ?>
-        </div>
-      <?php endif ?>
-    <?php endif ?>
-  </div>
-
-  <!-- E-Mail Detail -->
-  <div id="detail">
-    <?php if ($email): ?>
-      <div class="d-subject"><?= highlight(esc($email['subject'] ?: '(kein Betreff)'), $q) ?></div>
-      <div class="d-meta">
-        <span class="lbl">Von</span>     <span class="val"><?= highlight(esc($email['from_addr']), $q) ?></span>
-        <span class="lbl">An</span>      <span class="val"><?= esc($email['to_addrs']) ?></span>
-        <?php if ($email['cc_addrs']): ?>
-        <span class="lbl">Cc</span>      <span class="val"><?= esc($email['cc_addrs']) ?></span>
+  <!-- ── MIDDLE PANEL ──────────────────────────────────────────────────── -->
+  <div id="panel-mid">
+    <div class="search-wrap">
+      <form id="sf" method="get" action="" class="search-row">
+        <?php if ($mailbox !== ''): ?>
+          <input type="hidden" name="mailbox" value="<?= esc($mailbox) ?>">
         <?php endif ?>
-        <span class="lbl">Datum</span>   <span class="val"><?= esc($email['date']) ?></span>
-        <span class="lbl">Postfach</span><span class="val"><?= esc($email['mailbox']) ?></span>
-        <span class="lbl">Größe</span>   <span class="val"><?= fmtBytes((int)$email['total_size_bytes']) ?></span>
-      </div>
-      <div class="d-body"><?= highlight(esc($email['body_text'] ?: '(kein Text)'), $q) ?></div>
-      <?php if (!empty($email['attachments'])): ?>
-        <div class="att-section">
-          <div class="att-section-title">Anhänge (<?= count($email['attachments']) ?>)</div>
-          <div class="att-list">
-            <?php foreach ($email['attachments'] as $a):
-              $dlUrl = '/download.php?' . http_build_query(['mailbox'=>$a['mailbox'],'sha256'=>$a['sha256']]);
-            ?>
-              <a class="att" href="<?= esc($dlUrl) ?>" download="<?= esc($a['original_filename']) ?>">
-                📎 <?= esc($a['original_filename']) ?>
-                <span class="att-size"><?= fmtBytes((int)$a['size']) ?></span>
-              </a>
-            <?php endforeach ?>
-          </div>
-        </div>
-      <?php endif ?>
+        <input id="q" name="q" type="text" value="<?= esc($q) ?>"
+               placeholder="Suchen — Betreff, Absender, Text…" autocomplete="off">
+        <button class="search-btn" type="submit">↵</button>
+      </form>
+    </div>
+
+    <div class="filter-row">
+      <input type="date" form="sf" name="date_from" class="fi"
+             value="<?= esc($dateFrom) ?>" title="Von Datum">
+      <span class="date-sep">–</span>
+      <input type="date" form="sf" name="date_to" class="fi"
+             value="<?= esc($dateTo) ?>" title="Bis Datum">
+      <a class="att-toggle <?= $hasAtt ? 'on' : '' ?>"
+         href="<?= esc(buildUrl(['has_att'=>$hasAtt?'':'1','page'=>'1'])) ?>"
+         title="Nur E-Mails mit Anhängen">📎</a>
+      <select form="sf" name="sort" class="fi" onchange="document.getElementById('sf').submit()">
+        <?php foreach ($sortOptions as $key => $opt): ?>
+          <option value="<?= esc($key) ?>" <?= $sort===$key?'selected':'' ?>><?= esc($opt['label']) ?></option>
+        <?php endforeach ?>
+      </select>
+    </div>
+
+    <?php if ($totalFound > 0): ?>
+    <div class="list-head">
+      <span>
+        <?php
+          $from = $offset + 1; $to = min($offset + count($results), $totalFound);
+          echo number_format($from).'–'.number_format($to).' / '.number_format($totalFound);
+          if ($q !== '') echo ' für <em>'.esc($q).'</em>';
+        ?>
+      </span>
+      <a href="<?= esc(buildUrl(['export'=>'csv','page'=>''])) ?>" title="Als CSV exportieren">⬇ CSV</a>
+    </div>
     <?php else: ?>
-      <div class="d-placeholder">
-        <div>E-Mail auswählen zum Lesen</div>
-        <div class="keys">Tastatur: <kbd>j</kbd><kbd>k</kbd> navigieren · <kbd>Enter</kbd> öffnen · <kbd>/</kbd> suchen</div>
+    <div class="list-head">
+      <span><?= $q !== '' ? 'Keine Ergebnisse für <em>'.esc($q).'</em>' : 'Keine E-Mails' ?></span>
+    </div>
+    <?php endif ?>
+
+    <div class="email-list">
+      <?php if (empty($results) && $totalFound === 0): ?>
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <div><?= $q !== '' ? 'Keine Treffer' : 'Leer' ?></div>
+        </div>
+      <?php else: ?>
+        <?php foreach ($results as $idx => $r):
+          $isActive = ($r['stable_id'] === $selectedId && $r['mailbox'] === $selMailbox);
+          $link = buildUrl(['id'=>$r['stable_id'],'smb'=>$r['mailbox'],'page'=>(string)$page]);
+          $attCount = (int)$r['att_count'];
+        ?>
+        <div class="erow <?= $isActive ? 'cur' : '' ?>"
+             data-href="<?= esc($link) ?>"
+             data-idx="<?= $idx ?>"
+             onclick="window.location=this.dataset.href">
+          <div class="e-subj"><?= highlight(esc($r['subject']?:'(kein Betreff)'),$q) ?></div>
+          <div class="e-meta">
+            <span><?= highlight(esc($r['from_addr']),$q) ?></span>
+            <span>·</span>
+            <span><?= esc(substr($r['date'],0,10)) ?></span>
+            <?php if ($mailbox === ''): ?>
+              <span class="mb-tag"><?= esc($r['mailbox']) ?></span>
+            <?php endif ?>
+            <?php if ($attCount > 0): ?>
+              <span class="att-badge">📎<?= $attCount > 1 ? " $attCount" : '' ?></span>
+            <?php endif ?>
+          </div>
+          <div class="e-prev"><?= highlight(esc($r['preview']),$q) ?></div>
+        </div>
+        <?php endforeach ?>
+      <?php endif ?>
+    </div>
+
+    <?php if ($totalPages > 1): ?>
+    <div class="pagination">
+      <?php if ($page > 1): ?>
+        <a href="<?= esc(buildUrl(['page'=>'1'])) ?>">«</a>
+        <a href="<?= esc(buildUrl(['page'=>(string)($page-1)])) ?>">‹</a>
+      <?php else: ?><span class="dis">«</span><span class="dis">‹</span><?php endif ?>
+      <?php
+        $s = max(1,$page-2); $e = min($totalPages,$page+2);
+        if ($s > 1) echo '<span>…</span>';
+        for ($i=$s; $i<=$e; $i++):
+      ?>
+        <?php if ($i===$page): ?><span class="cur"><?= $i ?></span>
+        <?php else: ?><a href="<?= esc(buildUrl(['page'=>(string)$i])) ?>"><?= $i ?></a><?php endif ?>
+      <?php endfor; if ($e < $totalPages) echo '<span>…</span>'; ?>
+      <?php if ($page < $totalPages): ?>
+        <a href="<?= esc(buildUrl(['page'=>(string)($page+1)])) ?>">›</a>
+        <a href="<?= esc(buildUrl(['page'=>(string)$totalPages])) ?>">»</a>
+      <?php else: ?><span class="dis">›</span><span class="dis">»</span><?php endif ?>
+    </div>
+    <?php endif ?>
+  </div>
+
+  <!-- ── DETAIL PANEL ───────────────────────────────────────────────────── -->
+  <div id="panel-detail">
+    <?php if ($email): ?>
+      <div class="d-content">
+        <div class="d-subject"><?= highlight(esc($email['subject']?:'(kein Betreff)'),$q) ?></div>
+        <div class="d-meta">
+          <span class="d-lbl">Von</span>      <span class="d-val"><?= highlight(esc($email['from_addr']),$q) ?></span>
+          <span class="d-lbl">An</span>       <span class="d-val"><?= esc($email['to_addrs']) ?></span>
+          <?php if ($email['cc_addrs']): ?>
+          <span class="d-lbl">Cc</span>       <span class="d-val"><?= esc($email['cc_addrs']) ?></span>
+          <?php endif ?>
+          <span class="d-lbl">Datum</span>    <span class="d-val"><?= esc($email['date']) ?></span>
+          <span class="d-lbl">Postfach</span> <span class="d-val"><?= esc($email['mailbox']) ?></span>
+          <span class="d-lbl">Größe</span>    <span class="d-val"><?= fmtBytes((int)$email['total_size_bytes']) ?></span>
+        </div>
+        <div class="d-body"><?= highlight(esc($email['body_text']?:'(kein Text)'),$q) ?></div>
+
+        <?php if (!empty($email['attachments'])): ?>
+        <div class="att-section">
+          <div class="att-sec-title">Anhänge (<?= count($email['attachments']) ?>)</div>
+          <?php
+            $multiAtt = count($email['attachments']) > 1;
+            foreach ($email['attachments'] as $ai => $a):
+              $dlBase = ['mailbox'=>$a['mailbox'],'sha256'=>$a['sha256']];
+              $dlUrl  = '/download.php?'.http_build_query($dlBase);
+              $inUrl  = '/download.php?'.http_build_query($dlBase + ['inline'=>'1']);
+              $vtRow  = $vtStatuses[$a['sha256']] ?? null;
+              $vtSt   = $vtRow['status'] ?? 'none';
+              $isImg  = in_array($a['mime'],['image/jpeg','image/png','image/gif','image/webp','image/svg+xml'],true);
+              $isPdf  = $a['mime'] === 'application/pdf';
+              $hasPreview = $isImg || $isPdf;
+              $previewOpen = $hasPreview && !$multiAtt;
+              $blockId = 'att-'.$ai;
+          ?>
+          <div class="att-block">
+            <div class="att-hdr" onclick="toggleAtt('<?= $blockId ?>')" id="<?= $blockId ?>-hdr">
+              <span>📎</span>
+              <span class="att-fname"><?= esc($a['original_filename'] ?: basename($a['stored_path'])) ?></span>
+              <span class="att-fsize"><?= fmtBytes((int)$a['size']) ?></span>
+
+              <?php if ($vtSt === 'clean'): ?>
+                <span class="vt-badge vt-clean">✓ Sauber</span>
+              <?php elseif ($vtSt === 'infected'): ?>
+                <span class="vt-badge vt-infected">⚠ Infiziert</span>
+              <?php elseif ($vtSt === 'pending'): ?>
+                <span class="vt-badge vt-pending">⏳</span>
+              <?php else: ?>
+                <span class="vt-none">○</span>
+              <?php endif ?>
+
+              <?php if ($vtSt === 'infected'): ?>
+                <span class="att-blocked">Gesperrt</span>
+              <?php else: ?>
+                <a class="att-dl" href="<?= esc($dlUrl) ?>" onclick="event.stopPropagation()">↓ Download</a>
+              <?php endif ?>
+            </div>
+
+            <?php if ($hasPreview): ?>
+            <div class="att-preview <?= $previewOpen ? 'open' : '' ?>" id="<?= $blockId ?>-prev">
+              <?php if ($isImg): ?>
+                <img src="<?= esc($inUrl) ?>" alt="<?= esc($a['original_filename']) ?>"
+                     onclick="window.open('<?= esc($dlUrl) ?>','_blank')">
+              <?php else: ?>
+                <iframe src="<?= esc($inUrl) ?>" loading="lazy"></iframe>
+              <?php endif ?>
+            </div>
+            <?php endif ?>
+          </div>
+          <?php endforeach ?>
+        </div>
+        <?php endif ?>
+      </div>
+
+    <?php else: ?>
+      <div class="d-empty">
+        <div class="icon">✉️</div>
+        <div>E-Mail auswählen</div>
+        <div style="font-size:.68rem;color:var(--text-3);margin-top:.3rem">
+          <kbd>j</kbd><kbd>k</kbd> navigieren &nbsp;·&nbsp; <kbd>Enter</kbd> öffnen &nbsp;·&nbsp; <kbd>/</kbd> suchen
+        </div>
       </div>
     <?php endif ?>
   </div>
+
+</div><!-- #app -->
+
+<!-- ── Status bar ──────────────────────────────────────────────────────── -->
+<div id="statusbar">
+  <span><?= number_format($total) ?> E-Mails · Import: <?= esc(substr((string)$lastImport,0,10)) ?></span>
+  <span style="color:var(--text-3)">MariaDB · PHP</span>
 </div>
 
-<div id="statusbar">
-  <span><?= number_format($total) ?> E-Mails gesamt · letzter Import: <?= esc((string)$lastImport) ?></span>
-  <span>MariaDB ● PHP</span>
+<!-- ── Theme picker popover ────────────────────────────────────────────── -->
+<div id="theme-pop">
+  <div class="tp-label">Akzentfarbe</div>
+  <div class="tp-swatches" id="tp-swatches"></div>
+  <div class="tp-label" style="margin-top:.1rem">Modus</div>
+  <div class="tp-mode" onclick="toggleMode()">
+    <div class="mode-toggle"></div>
+    <span id="mode-label">Hell</span>
+  </div>
 </div>
 
 <script>
-// ── Mailbox-Dropdown ──────────────────────────────────────────────────────────
-function toggleDrop(e) {
+// ── Theme picker ──────────────────────────────────────────────────────────
+const ACCENTS=[
+  {key:'',     color:'#c0c0c0',label:'Grau (Standard)'},
+  {key:'blue', color:'#4a90d9',label:'Blau'},
+  {key:'teal', color:'#2a9d8f',label:'Türkis'},
+  {key:'amber',color:'#d4900a',label:'Bernstein'},
+  {key:'sage', color:'#6a9f6a',label:'Salbei'},
+  {key:'rose', color:'#c0606a',label:'Rose'},
+];
+
+function buildSwatches(){
+  const cur=localStorage.getItem('mrija-accent')||'';
+  const c=document.getElementById('tp-swatches');
+  c.innerHTML='';
+  ACCENTS.forEach(a=>{
+    const s=document.createElement('div');
+    s.className='tp-sw'+(a.key===cur?' on':'');
+    s.style.background=a.color;
+    s.title=a.label;
+    s.addEventListener('click',e=>{
+      e.stopPropagation();
+      localStorage.setItem('mrija-accent',a.key);
+      const h=document.documentElement;
+      a.key?h.setAttribute('data-accent',a.key):h.removeAttribute('data-accent');
+      c.querySelectorAll('.tp-sw').forEach(x=>x.classList.remove('on'));
+      s.classList.add('on');
+    });
+    c.appendChild(s);
+  });
+}
+
+function toggleThemePop(e){
   e.stopPropagation();
-  const d = document.getElementById('mb-dropdown');
-  d.style.display = d.style.display === 'none' ? 'block' : 'none';
-}
-document.addEventListener('click', () => {
-  document.getElementById('mb-dropdown').style.display = 'none';
-});
-
-// ── Tastaturnavigation ────────────────────────────────────────────────────────
-const results = Array.from(document.querySelectorAll('.result'));
-let focusIdx   = results.findIndex(r => r.classList.contains('active'));
-
-function moveFocus(delta) {
-  const next = focusIdx + delta;
-  if (next < 0 || next >= results.length) return;
-  focusIdx = next;
-  results[focusIdx].scrollIntoView({block: 'nearest'});
-  results.forEach((r, i) => r.style.outline = i === focusIdx ? '1px solid #4f46e5' : '');
+  const pop=document.getElementById('theme-pop');
+  if(pop.classList.contains('open')){pop.classList.remove('open');return;}
+  buildSwatches();
+  const isLight=document.documentElement.getAttribute('data-mode')==='light';
+  document.getElementById('mode-label').textContent=isLight?'Hell':'Dunkel';
+  const btn=document.getElementById('theme-btn');
+  const r=btn.getBoundingClientRect();
+  pop.style.bottom=(window.innerHeight-r.top+4)+'px';
+  pop.style.left=r.left+'px';
+  pop.classList.add('open');
 }
 
-document.addEventListener('keydown', e => {
-  const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
-    // '/' focuses search
-    if (e.key === 'Escape') document.activeElement.blur();
+function toggleMode(){
+  const h=document.documentElement;
+  const isLight=h.getAttribute('data-mode')==='light';
+  if(isLight){h.removeAttribute('data-mode');localStorage.setItem('mrija-mode','dark');}
+  else{h.setAttribute('data-mode','light');localStorage.setItem('mrija-mode','light');}
+  document.getElementById('mode-label').textContent=isLight?'Dunkel':'Hell';
+}
+
+document.addEventListener('click',()=>document.getElementById('theme-pop').classList.remove('open'));
+
+// ── Attachment preview toggle ─────────────────────────────────────────────
+function toggleAtt(id){
+  const p=document.getElementById(id+'-prev');
+  if(p)p.classList.toggle('open');
+}
+
+// ── Keyboard navigation ───────────────────────────────────────────────────
+const rows=Array.from(document.querySelectorAll('.erow'));
+let fi=rows.findIndex(r=>r.classList.contains('cur'));
+
+function moveFocus(d){
+  const n=fi+d;
+  if(n<0||n>=rows.length)return;
+  fi=n;
+  rows[fi].scrollIntoView({block:'nearest'});
+  rows.forEach((r,i)=>r.style.outline=i===fi?'1px solid var(--accent)':'');
+}
+
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement?.tagName;
+  if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA'){
+    if(e.key==='Escape')document.activeElement.blur();
     return;
   }
-  switch (e.key) {
-    case 'j': case 'ArrowDown':  e.preventDefault(); moveFocus(+1); break;
-    case 'k': case 'ArrowUp':    e.preventDefault(); moveFocus(-1); break;
-    case 'Enter':
-      if (focusIdx >= 0) window.location = results[focusIdx].dataset.href;
-      break;
-    case '/':
-      e.preventDefault();
-      document.getElementById('q').focus();
-      break;
+  switch(e.key){
+    case 'j':case 'ArrowDown':e.preventDefault();moveFocus(+1);break;
+    case 'k':case 'ArrowUp':e.preventDefault();moveFocus(-1);break;
+    case 'Enter':if(fi>=0)window.location=rows[fi].dataset.href;break;
+    case '/':e.preventDefault();document.getElementById('q').focus();break;
   }
 });
 </script>
-
 </body>
 </html>
