@@ -77,4 +77,4 @@ docker compose run --rm app php web/src/cli/search_archive.php --query "invoice"
 
 - Mailbox data: `./data/` (mounted into container)
 - Database: Docker volume `mariadb_data` (persists across restarts)
-- To back up the database: `docker compose exec db mysqldump -u mailreview -pmailreview mailreview > backup.sql`
+- To back up the database: `docker compose exec db sh -c 'mysqldump -u mailreview -p"$MARIADB_PASSWORD" mailreview' > backup.sql`

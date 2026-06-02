@@ -39,7 +39,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${MRIJA_WEB_PORT:-8080}:8080"
+      - "127.0.0.1:${MRIJA_WEB_PORT:-8080}:8080"
     volumes:
       - ./data:/app/data
       - ./web:/app/web
@@ -52,6 +52,7 @@ services:
       DB_PASS: ${MRIJA_DB_PASSWORD:-change-this-app-password}
       COWORKER_PASSWORD_HASH: ${COWORKER_PASSWORD_HASH:-}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      VT_API_KEY: ${VT_API_KEY:-}
     command: php -S 0.0.0.0:8080 -t /app/web/public
 
 volumes:
