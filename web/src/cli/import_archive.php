@@ -155,6 +155,7 @@ $emailsImported = 0;
 $offset = 0;
 
 while ($offset < $totalEmails) {
+    // $chunkSize cast to int at line 61; $offset is internal — interpolation is safe
     $rows = $sqlite->query(
         "SELECT mailbox, stable_id, filepath, folder, date, from_addr,
                 to_addrs, cc_addrs, subject, body_text, total_size_bytes
@@ -210,6 +211,7 @@ $offset = 0;
 
 while ($offset < $totalAtts) {
     $rows = $sqlite->query(
+        // $chunkSize cast to int at line 61; $offset is internal — interpolation is safe
         "SELECT e.mailbox, a.email_stable_id, a.stored_path,
                 a.sha256, a.size, a.mime, a.original_filename
          FROM attachments a

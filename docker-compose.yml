@@ -53,6 +53,9 @@ services:
       COWORKER_PASSWORD_HASH: ${COWORKER_PASSWORD_HASH:-}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
       VT_API_KEY: ${VT_API_KEY:-}
+      UPDATE_SERVER_URL: ${UPDATE_SERVER_URL:-}
+      DO_LOG_URL: ${DO_LOG_URL:-}
+      DO_LOG_TOKEN: ${DO_LOG_TOKEN:-}
     command: php -S 0.0.0.0:8080 -t /app/web/public
 
 volumes:

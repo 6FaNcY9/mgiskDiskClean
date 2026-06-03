@@ -19,6 +19,10 @@ return [
     'admin_password_hash'    => $_ENV['ADMIN_PASSWORD_HASH'] ?? getenv('ADMIN_PASSWORD_HASH') ?: '',
     'vt_api_key'             => $_ENV['VT_API_KEY'] ?? getenv('VT_API_KEY') ?: '',
 
+    'update_server_url' => $_ENV['UPDATE_SERVER_URL'] ?? getenv('UPDATE_SERVER_URL') ?: '',
+    'do_log_url'        => $_ENV['DO_LOG_URL']        ?? getenv('DO_LOG_URL')        ?: '',
+    'do_log_token'      => $_ENV['DO_LOG_TOKEN']      ?? getenv('DO_LOG_TOKEN')      ?: '',
+
     'session' => [
         'name'     => 'mailreview_session',
         'lifetime' => 7200,

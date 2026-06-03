@@ -17,6 +17,7 @@ web/config/local.php
 
 # local mailbox data (large; outside webroot)
 data/
+!data/mailboxes.txt.example
 
 # git worktrees
 .worktrees/
@@ -24,3 +25,4 @@ data/
 # IDE / tooling
 .idea/
 .superpowers/
+.sisyphus/

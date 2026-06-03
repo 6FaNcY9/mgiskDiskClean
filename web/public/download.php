@@ -9,10 +9,21 @@
  */
 declare(strict_types=1);
 
-// ── Config + DB ───────────────────────────────────────────────────────────────
+// ── Config + Auth ─────────────────────────────────────────────────────────────
 $cfgPath = __DIR__ . '/../config/local.php';
 if (!is_file($cfgPath)) { http_response_code(500); die('Config missing.'); }
 $config = require $cfgPath;
+
+spl_autoload_register(function (string $c): void {
+    $map = [
+        'MailReview\\Auth\\SessionManager' => __DIR__ . '/../src/Auth/SessionManager.php',
+        'MailReview\\Auth\\CsrfGuard'      => __DIR__ . '/../src/Auth/CsrfGuard.php',
+    ];
+    if (isset($map[$c])) require_once $map[$c];
+});
+$sm = new \MailReview\Auth\SessionManager($config['session'] ?? []);
+$sm->start();
+$sm->requireAuth('/login.php');
 
 $db     = $config['db'] ?? [];
 $socket = $db['socket'] ?? '';
@@ -77,47 +88,57 @@ if (!is_file($realPath)) {
 // ── Stream file ───────────────────────────────────────────────────────────────
 $originalName = $att['original_filename'] ?: $filename;
 $mime         = $att['mime'] ?: 'application/octet-stream';
+$isInline     = ($_GET['inline'] ?? '') === '1';
 
-// ── Inline preview mode (in-app iframe/img) — skip VT, serve inline ──────
-$isInline = ($_GET['inline'] ?? '') === '1';
-if ($isInline) {
-    header('Content-Type: ' . $mime);
-    header('Content-Disposition: inline; filename="' . addslashes($originalName) . '"');
-    header('Content-Length: ' . filesize($realPath));
-    header('Cache-Control: private, max-age=3600');
-    header('X-Content-Type-Options: nosniff');
-    readfile($realPath);
-    exit;
-}
+// RFC 6266 dual encoding for Content-Disposition filename (handles non-ASCII)
+$asciiFallback = preg_replace('/[^\x20-\x7E]+/', '_', $originalName);
+$utf8Encoded   = rawurlencode($originalName);
 
-// ── VirusTotal gate for explicit downloads ────────────────────────────────
+// ── VirusTotal gate (applies to ALL downloads, including inline) ──────────
 $vtApiKey = $config['vt_api_key'] ?? '';
 if ($vtApiKey !== '') {
     spl_autoload_register(function (string $class): void {
         $map = ['MailReview\\VirusTotal\\VtService' => __DIR__ . '/../src/VirusTotal/VtService.php'];
         if (isset($map[$class])) require_once $map[$class];
     });
-    $vt     = new \MailReview\VirusTotal\VtService($pdo, $vtApiKey, $dataDir);
-    $vtRes  = $vt->check($sha256, $realPath);
+    $vt    = new \MailReview\VirusTotal\VtService($pdo, $vtApiKey, $dataDir);
+    $vtRes = $vt->check($sha256, $realPath);
 
     if ($vtRes['status'] === 'infected') {
         http_response_code(403);
-        echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+        if ($isInline) {
+            // Return a minimal blocked placeholder for iframe/img contexts
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<html><body style="background:#1a1a1a;color:#c0606a;font-family:sans-serif;'
+               . 'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">'
+               . '<div style="text-align:center"><div style="font-size:2rem">&#9888;</div>'
+               . '<p style="font-size:.8rem">Blocked by VirusTotal</p></div></body></html>';
+        } else {
+            echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Datei blockiert</title>
 <style>body{background:#0d0d0d;color:#e8e8e8;font-family:system-ui,sans-serif;
 display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
 .box{text-align:center;max-width:400px}.icon{font-size:3rem;margin-bottom:1rem}
 h1{color:#c0606a;font-size:1.1rem;margin-bottom:.5rem}
 p{color:#888;font-size:.85rem;line-height:1.6}</style></head>
-<body><div class="box"><div class="icon">⚠️</div>
+<body><div class="box"><div class="icon">&#9888;</div>
 <h1>Datei blockiert</h1>
 <p>VirusTotal hat in dieser Datei Schadsoftware erkannt (' . (int)$vtRes['positives'] . ' Treffer).<br>
 Der Download wurde gesperrt.</p></div></body></html>';
+        }
         exit;
     }
 
     if ($vtRes['status'] === 'pending') {
-        echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+        http_response_code(202);
+        if ($isInline) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<html><body style="background:#1a1a1a;color:#888;font-family:sans-serif;'
+               . 'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">'
+               . '<div style="text-align:center"><div style="font-size:2rem">&#8987;</div>'
+               . '<p style="font-size:.8rem">Scanning…</p></div></body></html>';
+        } else {
+            echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <meta http-equiv="refresh" content="4">
 <title>Wird geprüft…</title>
 <style>body{background:#0d0d0d;color:#e8e8e8;font-family:system-ui,sans-serif;
@@ -125,9 +146,10 @@ display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0
 .box{text-align:center;max-width:400px}.icon{font-size:2.5rem;margin-bottom:1rem}
 h1{color:#888;font-size:1rem;margin-bottom:.5rem}
 p{color:#555;font-size:.8rem}</style></head>
-<body><div class="box"><div class="icon">⏳</div>
+<body><div class="box"><div class="icon">&#8987;</div>
 <h1>Wird von VirusTotal geprüft…</h1>
 <p>Diese Seite lädt automatisch neu. Bitte warten.</p></div></body></html>';
+        }
         exit;
     }
     // status: clean, error, or disabled → fall through and serve
@@ -135,7 +157,11 @@ p{color:#555;font-size:.8rem}</style></head>
 
 // ── Serve file ────────────────────────────────────────────────────────────
 header('Content-Type: ' . $mime);
-header('Content-Disposition: attachment; filename="' . addslashes($originalName) . '"');
+if ($isInline) {
+    header("Content-Disposition: inline; filename=\"$asciiFallback\"; filename*=UTF-8''$utf8Encoded");
+} else {
+    header("Content-Disposition: attachment; filename=\"$asciiFallback\"; filename*=UTF-8''$utf8Encoded");
+}
 header('Content-Length: ' . filesize($realPath));
 header('Cache-Control: private, max-age=3600');
 header('X-Content-Type-Options: nosniff');

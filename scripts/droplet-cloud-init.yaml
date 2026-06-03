@@ -1,0 +1,117 @@
+#cloud-config
+# DigitalOcean droplet bootstrap for the Mrija relay server.
+# Paste this into "Startup scripts (Free)" during droplet creation.
+# After first boot: ssh root@<ip> 'cat /var/log/mrija-bootstrap.log' to get the bearer token.
+#
+# Recommended droplet: Basic / 1 vCPU / 1 GB / 25 GB SSD / Ubuntu 24.04 / Frankfurt FRA1
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - nginx
+  - php8.3-fpm
+  - php8.3-cli
+  - ufw
+  - certbot
+  - python3-certbot-nginx
+  - unzip
+
+write_files:
+  - path: /etc/nginx/sites-available/mrija
+    owner: root:root
+    permissions: '0644'
+    content: |
+      server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        server_name _;
+        root /var/www/mrija;
+        index index.html;
+        client_max_body_size 250M;
+
+        # Static manifest + dump downloads
+        location /updates/ {
+          autoindex off;
+          try_files $uri =404;
+        }
+
+        # POST /log — activity beacon (PHP-FPM)
+        location = /log {
+          fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+          include       fastcgi_params;
+          fastcgi_param SCRIPT_FILENAME /var/www/mrija/log.php;
+          fastcgi_param REMOTE_ADDR     $remote_addr;
+        }
+
+        # Block everything else
+        location / {
+          return 404;
+        }
+      }
+
+  - path: /var/www/mrija/log.php
+    owner: www-data:www-data
+    permissions: '0644'
+    content: |
+      <?php
+      declare(strict_types=1);
+      // Bearer-token gated activity log endpoint.
+      // Token stored in /etc/mrija/log_secret (generated at boot, chmod 640 root:www-data).
+      $secret = trim((string)@file_get_contents('/etc/mrija/log_secret'));
+      $auth   = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+      if ($secret === '' || !hash_equals("Bearer $secret", $auth)) {
+          http_response_code(401);
+          exit('unauthorized');
+      }
+      if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+          http_response_code(405);
+          exit('method not allowed');
+      }
+      $body = (string)file_get_contents('php://input');
+      $data = json_decode($body, true);
+      if (!is_array($data)) {
+          http_response_code(400);
+          exit('bad json');
+      }
+      $line = json_encode([
+          'received_at' => gmdate('c'),
+          'remote'      => $_SERVER['REMOTE_ADDR'] ?? '',
+          'event'       => $data,
+      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+      @mkdir('/var/log/mrija', 0750, true);
+      file_put_contents('/var/log/mrija/activity.log', $line, FILE_APPEND | LOCK_EX);
+      http_response_code(204);
+
+  - path: /var/www/mrija/index.html
+    owner: www-data:www-data
+    permissions: '0644'
+    content: |
+      <!DOCTYPE html><html><body>Mrija relay — OK</body></html>
+
+runcmd:
+  - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija
+  # Generate a random bearer token and store it (readable only by root + www-data)
+  - openssl rand -hex 24 > /etc/mrija/log_secret
+  - chmod 640 /etc/mrija/log_secret
+  - chown root:www-data /etc/mrija/log_secret
+  - chown -R www-data:www-data /var/www/mrija /var/log/mrija
+  # Activate nginx site
+  - ln -sf /etc/nginx/sites-available/mrija /etc/nginx/sites-enabled/mrija
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t && systemctl reload nginx
+  # Firewall
+  - ufw allow OpenSSH
+  - ufw allow 'Nginx Full'
+  - ufw --force enable
+  # Print bearer token to a readable log so admin can grab it with one SSH command
+  - |
+    {
+      echo "=== MRIJA RELAY BOOTSTRAP ==="
+      echo "Droplet IP: $(curl -s http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address || hostname -I | awk '{print $1}')"
+      echo "Bearer token for DO_LOG_TOKEN:"
+      cat /etc/mrija/log_secret
+      echo ""
+      echo "Test: curl -X POST http://<ip>/log -H \"Authorization: Bearer $(cat /etc/mrija/log_secret)\" -H 'Content-Type: application/json' -d '{\"event\":\"ping\"}'"
+    } > /var/log/mrija-bootstrap.log
+  - chmod 600 /var/log/mrija-bootstrap.log
