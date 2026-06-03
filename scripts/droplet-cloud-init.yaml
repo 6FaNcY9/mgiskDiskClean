@@ -8,6 +8,10 @@
 package_update: true
 package_upgrade: true
 
+# bootcmd runs before write_files — create dirs so write_files has a target
+bootcmd:
+  - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija /var/www/mrija
+
 packages:
   - nginx
   - php8.3-fpm
@@ -90,7 +94,7 @@ write_files:
       <!DOCTYPE html><html><body>Mrija relay — OK</body></html>
 
 runcmd:
-  - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija
+  - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija  # ensure dirs exist
   # Generate a random bearer token and store it (readable only by root + www-data)
   - openssl rand -hex 24 > /etc/mrija/log_secret
   - chmod 640 /etc/mrija/log_secret
