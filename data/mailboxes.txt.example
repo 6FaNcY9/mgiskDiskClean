@@ -1,0 +1,8 @@
+# data/mailboxes.txt
+# One mailbox name per line. Comments (#) and blank lines are ignored.
+# Allowed characters: [a-zA-Z0-9._-]
+# Copy this file to data/mailboxes.txt and fill in real mailbox names.
+
+admin
+office
+postmaster

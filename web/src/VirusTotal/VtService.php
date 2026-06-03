@@ -125,29 +125,24 @@ class VtService
 
     private function fileScan(string $filePath): ?array
     {
-        $boundary = '----VTBound' . bin2hex(random_bytes(8));
-        $content  = file_get_contents($filePath);
-        if ($content === false) return null;
+        if (!function_exists('curl_init')) return null;
 
-        $body = "--{$boundary}\r\n"
-              . "Content-Disposition: form-data; name=\"apikey\"\r\n\r\n"
-              . $this->apiKey . "\r\n"
-              . "--{$boundary}\r\n"
-              . 'Content-Disposition: form-data; name="file"; filename="' . basename($filePath) . '"' . "\r\n"
-              . "Content-Type: application/octet-stream\r\n\r\n"
-              . $content . "\r\n"
-              . "--{$boundary}--";
+        $ch = curl_init('https://www.virustotal.com/vtapi/v2/file/scan');
+        if ($ch === false) return null;
 
-        $ctx = stream_context_create([
-            'http' => [
-                'method'  => 'POST',
-                'header'  => "Content-Type: multipart/form-data; boundary={$boundary}\r\n",
-                'content' => $body,
-                'timeout' => 30,
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => [
+                'apikey' => $this->apiKey,
+                'file'   => new \CURLFile($filePath, 'application/octet-stream', basename($filePath)),
             ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 60,
         ]);
-        $raw = @file_get_contents('https://www.virustotal.com/vtapi/v2/file/scan', false, $ctx);
-        if ($raw === false) return null;
+        $raw = curl_exec($ch);
+        curl_close($ch);
+
+        if ($raw === false || !is_string($raw)) return null;
         $data = json_decode($raw, true);
         return is_array($data) ? $data : null;
     }

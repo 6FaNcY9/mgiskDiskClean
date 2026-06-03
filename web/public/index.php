@@ -4,12 +4,24 @@
  */
 declare(strict_types=1);
 
-// ── DB connection ─────────────────────────────────────────────────────────────
+// ── Config + Auth ─────────────────────────────────────────────────────────────
 $cfgPath = __DIR__ . '/../config/local.php';
 if (!is_file($cfgPath)) {
     die('<p style="color:#f87171;font-family:sans-serif;padding:2rem">Config not found.</p>');
 }
 $config = require $cfgPath;
+
+spl_autoload_register(function (string $c): void {
+    $map = [
+        'MailReview\\Auth\\SessionManager' => __DIR__ . '/../src/Auth/SessionManager.php',
+        'MailReview\\Auth\\CsrfGuard'      => __DIR__ . '/../src/Auth/CsrfGuard.php',
+    ];
+    if (isset($map[$c])) require_once $map[$c];
+});
+$sm = new \MailReview\Auth\SessionManager($config['session'] ?? []);
+$sm->start();
+$sm->requireAuth('/login.php');
+$csrf = new \MailReview\Auth\CsrfGuard();
 $db     = $config['db'] ?? [];
 $socket = $db['socket'] ?? '';
 if ($socket && file_exists($socket)) {
@@ -456,7 +468,9 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
         <?= number_format($total) ?> gesamt<br>
         <span title="Letzter Import"><?= esc(substr((string)$lastImport,0,10)) ?></span>
       </span>
+      <button class="theme-btn" id="update-btn" onclick="checkUpdate(event)" title="Auf Updates prüfen">⟳</button>
       <button class="theme-btn" id="theme-btn" onclick="toggleThemePop(event)" title="Farbschema">🎨</button>
+      <a href="/logout.php" class="theme-btn" title="Abmelden" style="text-decoration:none">⏻</a>
     </div>
   </div>
 
@@ -654,7 +668,15 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
   <span style="color:var(--text-3)">MariaDB · PHP</span>
 </div>
 
+<!-- ── Update popover ──────────────────────────────────────────────────── -->
+<div id="update-pop" style="position:fixed;background:var(--bg-0);border:1px solid var(--border);
+  border-radius:8px;padding:.8rem 1rem;box-shadow:0 8px 28px rgba(0,0,0,.6);z-index:1001;
+  display:none;min-width:220px;font-size:.82rem;color:var(--text-2)">
+  <div id="update-pop-body">Prüfe…</div>
+</div>
+
 <!-- ── Theme picker popover ────────────────────────────────────────────── -->
+<div id="update-pop-ref"></div>
 <div id="theme-pop">
   <div class="tp-label">Akzentfarbe</div>
   <div class="tp-swatches" id="tp-swatches"></div>
@@ -719,7 +741,86 @@ function toggleMode(){
   document.getElementById('mode-label').textContent=isLight?'Dunkel':'Hell';
 }
 
-document.addEventListener('click',()=>document.getElementById('theme-pop').classList.remove('open'));
+document.addEventListener('click',e=>{
+  document.getElementById('theme-pop').classList.remove('open');
+  const up=document.getElementById('update-pop');
+  if(up&&!up.contains(e.target)&&e.target.id!=='update-btn')up.style.display='none';
+});
+
+// ── Activity logging ──────────────────────────────────────────────────────
+function logEvent(d){
+  try{navigator.sendBeacon('/api/log-event.php',JSON.stringify(d));}catch(e){}
+}
+
+document.addEventListener('DOMContentLoaded',()=>logEvent({type:'app_start'}));
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden')logEvent({type:'app_stop'});
+});
+document.querySelectorAll('.erow').forEach(r=>{
+  r.addEventListener('click',()=>logEvent({type:'email_opened',id:r.dataset.id||''}));
+});
+document.getElementById('sf')?.addEventListener('submit',()=>{
+  logEvent({type:'search',q:document.getElementById('q')?.value||''});
+});
+document.querySelectorAll('a[href*="download.php"]').forEach(a=>{
+  a.addEventListener('click',()=>{
+    const u=new URL(a.href,location.href);
+    logEvent({type:'download',sha256:u.searchParams.get('sha256')||''});
+  });
+});
+
+// ── Update check ──────────────────────────────────────────────────────────
+async function checkUpdate(e){
+  e.stopPropagation();
+  const btn=document.getElementById('update-btn');
+  const pop=document.getElementById('update-pop');
+  const body=document.getElementById('update-pop-body');
+  const r=btn.getBoundingClientRect();
+  pop.style.bottom=(window.innerHeight-r.top+4)+'px';
+  pop.style.left=r.left+'px';
+  pop.style.display='block';
+  body.innerHTML='<span style="color:var(--text-3)">Prüfe auf Updates…</span>';
+  try{
+    const res=await fetch('/api/check-update.php');
+    const j=await res.json();
+    if(!j.available){
+      body.innerHTML='<span style="color:var(--text-3)">Kein Update-Server konfiguriert.</span>';
+      return;
+    }
+    const m=j.manifest;
+    body.innerHTML=`<div style="margin-bottom:.5rem;font-weight:600;color:var(--text-1)">Update verfügbar</div>
+<div style="color:var(--text-3);margin-bottom:.75rem;font-size:.77rem">Version: ${m.version}</div>
+<button id="apply-update-btn" style="background:var(--accent);border:none;border-radius:5px;
+  color:#fff;cursor:pointer;font-size:.82rem;padding:.4rem .8rem;width:100%">
+  Jetzt installieren
+</button>`;
+    document.getElementById('apply-update-btn').onclick=()=>applyUpdate(m);
+  }catch(err){
+    body.innerHTML='<span style="color:#c0606a">Fehler beim Prüfen.</span>';
+  }
+}
+
+async function applyUpdate(manifest){
+  const body=document.getElementById('update-pop-body');
+  body.innerHTML='<span style="color:var(--text-3)">Installiere… bitte warten.</span>';
+  try{
+    const res=await fetch('/api/apply-update.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({manifest}),
+    });
+    const j=await res.json();
+    if(j.ok){
+      body.innerHTML='<span style="color:#6a9a6a">&#10003; Update installiert! Seite wird neu geladen…</span>';
+      logEvent({type:'update_applied',version:j.version});
+      setTimeout(()=>location.reload(),1500);
+    }else{
+      body.innerHTML=`<span style="color:#c0606a">Fehler: ${j.error||'unbekannt'}</span>`;
+    }
+  }catch(err){
+    body.innerHTML='<span style="color:#c0606a">Netzwerkfehler.</span>';
+  }
+}
 
 // ── Attachment preview toggle ─────────────────────────────────────────────
 function toggleAtt(id){
