@@ -1,6 +1,6 @@
 # Implementation Plan: Production UI Redesign
 
-## Phase 1: Core Functionality & Infrastructure
+## Phase 1: Core Functionality & Infrastructure [checkpoint: edd05f4]
 This phase focuses on the essential backend updates and hardening the Docker environment.
 
 - [x] **Task: Phase 1 Preparation - Setup PHP Testing** (1f80117)
@@ -14,7 +14,7 @@ This phase focuses on the essential backend updates and hardening the Docker env
     - [ ] **Write Tests**: Verify that `VT_API_KEY` is required but not hardcoded.
     - [ ] **Implement Feature**: Update `docker-compose.yml`, `web/config/local.php.docker`, and `.env.example` for secure environment management.
     - [ ] **Validate**: Ensure the stack starts correctly and VT integration is functional with a mock/test key.
-- [ ] **Task: Conductor - User Manual Verification 'Phase 1: Core Functionality & Infrastructure' (Protocol in workflow.md)**
+- [x] **Task: Conductor - User Manual Verification 'Phase 1: Core Functionality & Infrastructure' (Protocol in workflow.md)** (edd05f4)
 
 ## Phase 2: Theme & Layout System
 This phase establishes the visual foundation with CSS custom properties and a responsive shell.
