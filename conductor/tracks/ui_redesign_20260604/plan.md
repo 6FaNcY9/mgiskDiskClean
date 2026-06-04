@@ -3,7 +3,7 @@
 ## Phase 1: Core Functionality & Infrastructure
 This phase focuses on the essential backend updates and hardening the Docker environment.
 
-- [ ] **Task: Phase 1 Preparation - Setup PHP Testing**
+- [x] **Task: Phase 1 Preparation - Setup PHP Testing** (1f80117)
     - [ ] Create a basic test environment for PHP endpoints using `pytest`.
     - [ ] Verify that `pytest` can interact with a local PHP server.
 - [ ] **Task: Update download.php - Inline Mode & VirusTotal Gate**
