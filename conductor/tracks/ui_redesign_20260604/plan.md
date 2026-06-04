@@ -6,7 +6,7 @@ This phase focuses on the essential backend updates and hardening the Docker env
 - [x] **Task: Phase 1 Preparation - Setup PHP Testing** (1f80117)
     - [ ] Create a basic test environment for PHP endpoints using `pytest`.
     - [ ] Verify that `pytest` can interact with a local PHP server.
-- [ ] **Task: Update download.php - Inline Mode & VirusTotal Gate**
+- [x] **Task: Update download.php - Inline Mode & VirusTotal Gate** (7afb543)
     - [ ] **Write Tests**: Create integration tests in `tests/test_web_download.php` (using pytest/curl) to verify `?inline=1` and VT blocking.
     - [ ] **Implement Feature**: Add `?inline=1` support and the VirusTotal download gate to `web/public/download.php`.
     - [ ] **Validate**: Run tests and verify that images/PDFs render inline and infected files are blocked.
