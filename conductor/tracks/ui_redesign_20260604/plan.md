@@ -10,7 +10,7 @@ This phase focuses on the essential backend updates and hardening the Docker env
     - [ ] **Write Tests**: Create integration tests in `tests/test_web_download.php` (using pytest/curl) to verify `?inline=1` and VT blocking.
     - [ ] **Implement Feature**: Add `?inline=1` support and the VirusTotal download gate to `web/public/download.php`.
     - [ ] **Validate**: Run tests and verify that images/PDFs render inline and infected files are blocked.
-- [ ] **Task: Docker Hardening & Environment Configuration**
+- [x] **Task: Docker Hardening & Environment Configuration** (f4a8b13)
     - [ ] **Write Tests**: Verify that `VT_API_KEY` is required but not hardcoded.
     - [ ] **Implement Feature**: Update `docker-compose.yml`, `web/config/local.php.docker`, and `.env.example` for secure environment management.
     - [ ] **Validate**: Ensure the stack starts correctly and VT integration is functional with a mock/test key.
