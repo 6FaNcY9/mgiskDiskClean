@@ -23,11 +23,19 @@ spl_autoload_register(function (string $c): void {
 });
 $sm = new \MailReview\Auth\SessionManager($config['session'] ?? []);
 $sm->start();
-$sm->requireAuth('/login.php');
+
+$authEnabled = $config['auth']['enabled'] ?? true;
+if ($authEnabled) {
+    $sm->requireAuth('/login.php');
+}
 
 $db     = $config['db'] ?? [];
+$engine = $db['engine'] ?? 'mysql';
 $socket = $db['socket'] ?? '';
-if ($socket && file_exists($socket)) {
+
+if ($engine === 'sqlite') {
+    $dsn = "sqlite:" . ($db['path'] ?? ':memory:');
+} elseif ($socket && file_exists($socket)) {
     $dsn = "mysql:unix_socket=$socket;dbname={$db['dbname']};charset={$db['charset']}";
 } else {
     $host = $db['host'] ?? '127.0.0.1';
@@ -44,8 +52,10 @@ try {
 }
 
 // ── Input validation ──────────────────────────────────────────────────────────
-$mailbox = trim((string)($_GET['mailbox'] ?? ''));
-$sha256  = trim((string)($_GET['sha256']  ?? ''));
+$mailbox  = trim((string)($_GET['mailbox'] ?? ''));
+$sha256   = trim((string)($_GET['sha256']  ?? ''));
+$isInline = ($_GET['inline'] ?? '') === '1';
+$bypassVt = ($_GET['bypass_vt'] ?? '') === '1';
 
 if (!preg_match('/^[a-zA-Z0-9._-]+$/', $mailbox)) {
     http_response_code(400); die('Invalid mailbox.');
@@ -88,7 +98,6 @@ if (!is_file($realPath)) {
 // ── Stream file ───────────────────────────────────────────────────────────────
 $originalName = $att['original_filename'] ?: $filename;
 $mime         = $att['mime'] ?: 'application/octet-stream';
-$isInline     = ($_GET['inline'] ?? '') === '1';
 
 // RFC 6266 dual encoding for Content-Disposition filename (handles non-ASCII)
 $asciiFallback = preg_replace('/[^\x20-\x7E]+/', '_', $originalName);
@@ -96,7 +105,7 @@ $utf8Encoded   = rawurlencode($originalName);
 
 // ── VirusTotal gate (applies to ALL downloads, including inline) ──────────
 $vtApiKey = $config['vt_api_key'] ?? '';
-if ($vtApiKey !== '') {
+if ($vtApiKey !== '' && !$bypassVt) {
     spl_autoload_register(function (string $class): void {
         $map = ['MailReview\\VirusTotal\\VtService' => __DIR__ . '/../src/VirusTotal/VtService.php'];
         if (isset($map[$class])) require_once $map[$class];
