@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # push-update.sh — Dump the local MariaDB archive and push to the DO relay.
 #
-# Usage: ./scripts/push-update.sh
+# Usage:
+#   ./scripts/push-update.sh
+#   ./scripts/push-update.sh --check
+#   ./scripts/push-update.sh --dry-run
 #
 # Requires:
 #   - Docker Compose stack running locally (or .env with DB creds)
@@ -10,6 +13,22 @@
 #   - scp / ssh on PATH
 
 set -euo pipefail
+
+MODE="publish"
+case "${1:-}" in
+    --check) MODE="check" ;;
+    --dry-run) MODE="dry-run" ;;
+    -h|--help)
+        sed -n '1,20p' "$0"
+        exit 0
+        ;;
+    "")
+        ;;
+    *)
+        echo "ERROR: unknown argument: $1" >&2
+        exit 1
+        ;;
+esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -41,6 +60,37 @@ DB_NAME="${MRIJA_DB_NAME:-mailreview}"
 DB_USER="${MRIJA_DB_USER:-mailreview}"
 DB_PASS="${MRIJA_DB_PASSWORD:-}"
 
+check_requirements() {
+    local missing=0
+    for cmd in mysqldump gzip sha256sum scp ssh; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            echo "ERROR: missing command: $cmd" >&2
+            missing=1
+        fi
+    done
+    if [[ ! -f "$DO_SSH_KEY" ]]; then
+        echo "ERROR: SSH key not found: $DO_SSH_KEY" >&2
+        missing=1
+    fi
+    if [[ -z "$DB_PASS" ]]; then
+        echo "WARN: MRIJA_DB_PASSWORD is empty; this is only valid for socket/auth-local setups." >&2
+    fi
+    if [[ "$missing" -ne 0 ]]; then
+        exit 1
+    fi
+    echo "OK: requirements present"
+    echo "    relay: $DO_RELAY_HOST"
+    echo "    ssh key: $DO_SSH_KEY"
+    echo "    database: $DB_NAME at $DB_HOST:$DB_PORT as $DB_USER"
+}
+
+if [[ "$MODE" == "check" ]]; then
+    check_requirements
+    exit 0
+fi
+
+check_requirements
+
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DUMP_NAME="mrija-${TIMESTAMP}.sql.gz"
 TMP_DUMP="/tmp/${DUMP_NAME}"
@@ -60,6 +110,13 @@ mysqldump \
 DUMP_SIZE="$(du -sh "$TMP_DUMP" | cut -f1)"
 SHA256="$(sha256sum "$TMP_DUMP" | awk '{print $1}')"
 echo "    Size: $DUMP_SIZE  SHA-256: $SHA256"
+
+if [[ "$MODE" == "dry-run" ]]; then
+    echo "==> Dry run: dump created and verified locally, not uploading."
+    echo "    Would upload: ${DUMP_NAME}"
+    rm -f "$TMP_DUMP"
+    exit 0
+fi
 
 echo "==> Uploading to ${DO_RELAY_HOST}…"
 scp -i "$DO_SSH_KEY" -q "$TMP_DUMP" "${DO_RELAY_HOST}:/var/www/mrija/updates/${DUMP_NAME}"

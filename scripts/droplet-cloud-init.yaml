@@ -8,7 +8,7 @@
 package_update: true
 package_upgrade: true
 
-# bootcmd runs before write_files — create dirs so write_files has a target
+# bootcmd runs before write_files - create dirs so write_files has a target
 bootcmd:
   - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija /var/www/mrija
 
@@ -40,12 +40,16 @@ write_files:
           try_files $uri =404;
         }
 
-        # POST /log — activity beacon (PHP-FPM)
+        # POST /log - activity beacon (PHP-FPM)
         location = /log {
           fastcgi_pass unix:/run/php/php8.3-fpm.sock;
           include       fastcgi_params;
           fastcgi_param SCRIPT_FILENAME /var/www/mrija/log.php;
           fastcgi_param REMOTE_ADDR     $remote_addr;
+        }
+
+        location = / {
+          try_files /index.html =404;
         }
 
         # Block everything else
@@ -91,7 +95,7 @@ write_files:
     owner: www-data:www-data
     permissions: '0644'
     content: |
-      <!DOCTYPE html><html><body>Mrija relay — OK</body></html>
+      <!DOCTYPE html><html><body>Mrija relay - OK</body></html>
 
 runcmd:
   - mkdir -p /var/www/mrija/updates /var/log/mrija /etc/mrija  # ensure dirs exist
