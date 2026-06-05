@@ -7,7 +7,7 @@
 #   ./scripts/push-update.sh --dry-run
 #
 # Requires:
-#   - Docker Compose stack running locally (or .env with DB creds)
+#   - Docker Compose stack running locally
 #   - DO_RELAY_HOST set in environment or .env.push (e.g. "root@<ip>")
 #   - ~/.ssh/do_mrija SSH key for the droplet
 #   - scp / ssh on PATH
@@ -59,15 +59,25 @@ DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${MRIJA_DB_NAME:-mailreview}"
 DB_USER="${MRIJA_DB_USER:-mailreview}"
 DB_PASS="${MRIJA_DB_PASSWORD:-}"
+DUMP_VIA="${DUMP_VIA:-compose}"
 
 check_requirements() {
     local missing=0
-    for cmd in mysqldump gzip sha256sum scp ssh; do
+    for cmd in gzip sha256sum scp ssh; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "ERROR: missing command: $cmd" >&2
             missing=1
         fi
     done
+    if [[ "$DUMP_VIA" == "compose" ]]; then
+        if ! command -v docker >/dev/null 2>&1; then
+            echo "ERROR: missing command: docker" >&2
+            missing=1
+        fi
+    elif ! command -v mysqldump >/dev/null 2>&1; then
+        echo "ERROR: missing command: mysqldump" >&2
+        missing=1
+    fi
     if [[ ! -f "$DO_SSH_KEY" ]]; then
         echo "ERROR: SSH key not found: $DO_SSH_KEY" >&2
         missing=1
@@ -81,7 +91,7 @@ check_requirements() {
     echo "OK: requirements present"
     echo "    relay: $DO_RELAY_HOST"
     echo "    ssh key: $DO_SSH_KEY"
-    echo "    database: $DB_NAME at $DB_HOST:$DB_PORT as $DB_USER"
+    echo "    database: $DB_NAME via $DUMP_VIA as $DB_USER"
 }
 
 if [[ "$MODE" == "check" ]]; then
@@ -95,17 +105,28 @@ TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DUMP_NAME="mrija-${TIMESTAMP}.sql.gz"
 TMP_DUMP="/tmp/${DUMP_NAME}"
 
-echo "==> Dumping ${DB_NAME} from ${DB_HOST}:${DB_PORT}…"
-mysqldump \
-    --host="$DB_HOST" \
-    --port="$DB_PORT" \
-    --user="$DB_USER" \
-    --password="$DB_PASS" \
-    --single-transaction \
-    --skip-lock-tables \
-    --no-tablespaces \
-    "$DB_NAME" \
-  | gzip -9 > "$TMP_DUMP"
+echo "==> Dumping ${DB_NAME} via ${DUMP_VIA}…"
+if [[ "$DUMP_VIA" == "compose" ]]; then
+    docker compose exec -T db mariadb-dump \
+        --user="$DB_USER" \
+        --password="$DB_PASS" \
+        --single-transaction \
+        --skip-lock-tables \
+        --no-tablespaces \
+        "$DB_NAME" \
+      | gzip -9 > "$TMP_DUMP"
+else
+    mysqldump \
+        --host="$DB_HOST" \
+        --port="$DB_PORT" \
+        --user="$DB_USER" \
+        --password="$DB_PASS" \
+        --single-transaction \
+        --skip-lock-tables \
+        --no-tablespaces \
+        "$DB_NAME" \
+      | gzip -9 > "$TMP_DUMP"
+fi
 
 DUMP_SIZE="$(du -sh "$TMP_DUMP" | cut -f1)"
 SHA256="$(sha256sum "$TMP_DUMP" | awk '{print $1}')"
