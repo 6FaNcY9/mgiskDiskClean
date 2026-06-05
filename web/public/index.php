@@ -20,8 +20,12 @@ spl_autoload_register(function (string $c): void {
 });
 $sm = new \MailReview\Auth\SessionManager($config['session'] ?? []);
 $sm->start();
-$sm->requireAuth('/login.php');
+$authEnabled = $config['auth']['enabled'] ?? true;
+if ($authEnabled) {
+    $sm->requireAuth('/login.php');
+}
 $csrf = new \MailReview\Auth\CsrfGuard();
+$csrfToken = $csrf->getToken();
 $db     = $config['db'] ?? [];
 $socket = $db['socket'] ?? '';
 if ($socket && file_exists($socket)) {
@@ -243,6 +247,23 @@ if ($email && !empty($email['attachments'])) {
     }
 }
 
+// Load the current review decision if the migration has been applied.
+$reviewDecision = null;
+if ($email) {
+    try {
+        $reviewStmt = $pdo->prepare(
+            "SELECT decision, notes, reviewer_role, reviewer_name, updated_at
+             FROM review_decisions
+             WHERE mailbox = ? AND email_stable_id = ?
+             LIMIT 1"
+        );
+        $reviewStmt->execute([$email['mailbox'], $email['stable_id']]);
+        $reviewDecision = $reviewStmt->fetch() ?: null;
+    } catch (PDOException $e) {
+        $reviewDecision = null;
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
@@ -288,6 +309,7 @@ function buildUrl(array $overrides = []): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf-token" content="<?= esc($csrfToken) ?>">
 <title>Mrija Archive</title>
 <script>
 /* Anti-flicker: apply stored theme before first paint */
@@ -306,23 +328,27 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-1);color
 
 /* ── Theme variables ─────────────────────────────────────────────────────── */
 :root{
-  --bg-0:#0d0d0d;--bg-1:#111111;--bg-2:#1a1a1a;--bg-3:#222222;
-  --border:#2a2a2a;
-  --text-1:#e8e8e8;--text-2:#888888;--text-3:#444444;
-  --accent:#c0c0c0;--accent-bg:rgba(192,192,192,.08);--accent-border:rgba(192,192,192,.22);
+  --theme-bg:#111111;--theme-sidebar-bg:#0d0d0d;--theme-surface:#1a1a1a;--theme-surface-raised:#222222;
+  --theme-border:#2a2a2a;
+  --theme-text:#e8e8e8;--theme-text-dim:#888888;--theme-text-muted:#444444;
+  --theme-accent:#c0c0c0;--theme-accent-bg:rgba(192,192,192,.08);--theme-accent-border:rgba(192,192,192,.22);
+  --bg-0:var(--theme-sidebar-bg);--bg-1:var(--theme-bg);--bg-2:var(--theme-surface);--bg-3:var(--theme-surface-raised);
+  --border:var(--theme-border);
+  --text-1:var(--theme-text);--text-2:var(--theme-text-dim);--text-3:var(--theme-text-muted);
+  --accent:var(--theme-accent);--accent-bg:var(--theme-accent-bg);--accent-border:var(--theme-accent-border);
   --danger:#c0606a;--warn:#d4900a;--ok:#6a9f6a;
 }
 [data-mode="light"]{
-  --bg-0:#ebebeb;--bg-1:#f5f5f5;--bg-2:#ffffff;--bg-3:#e0e0e0;
-  --border:#d4d4d4;
-  --text-1:#1a1a1a;--text-2:#666666;--text-3:#aaaaaa;
-  --accent:#555555;--accent-bg:rgba(85,85,85,.07);--accent-border:rgba(85,85,85,.22);
+  --theme-bg:#f5f5f5;--theme-sidebar-bg:#ebebeb;--theme-surface:#ffffff;--theme-surface-raised:#e0e0e0;
+  --theme-border:#d4d4d4;
+  --theme-text:#1a1a1a;--theme-text-dim:#666666;--theme-text-muted:#aaaaaa;
+  --theme-accent:#555555;--theme-accent-bg:rgba(85,85,85,.07);--theme-accent-border:rgba(85,85,85,.22);
 }
-[data-accent="blue"]  {--accent:#4a90d9;--accent-bg:rgba(74,144,217,.1);--accent-border:rgba(74,144,217,.3)}
-[data-accent="teal"]  {--accent:#2a9d8f;--accent-bg:rgba(42,157,143,.1);--accent-border:rgba(42,157,143,.3)}
-[data-accent="amber"] {--accent:#d4900a;--accent-bg:rgba(212,144,10,.1);--accent-border:rgba(212,144,10,.3)}
-[data-accent="sage"]  {--accent:#6a9f6a;--accent-bg:rgba(106,159,106,.1);--accent-border:rgba(106,159,106,.3)}
-[data-accent="rose"]  {--accent:#c0606a;--accent-bg:rgba(192,96,106,.1);--accent-border:rgba(192,96,106,.3)}
+[data-accent="blue"]  {--theme-accent:#4a90d9;--theme-accent-bg:rgba(74,144,217,.1);--theme-accent-border:rgba(74,144,217,.3)}
+[data-accent="teal"]  {--theme-accent:#2a9d8f;--theme-accent-bg:rgba(42,157,143,.1);--theme-accent-border:rgba(42,157,143,.3)}
+[data-accent="amber"] {--theme-accent:#d4900a;--theme-accent-bg:rgba(212,144,10,.1);--theme-accent-border:rgba(212,144,10,.3)}
+[data-accent="sage"]  {--theme-accent:#6a9f6a;--theme-accent-bg:rgba(106,159,106,.1);--theme-accent-border:rgba(106,159,106,.3)}
+[data-accent="rose"]  {--theme-accent:#c0606a;--theme-accent-bg:rgba(192,96,106,.1);--theme-accent-border:rgba(192,96,106,.3)}
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 #app{display:flex;flex:1;overflow:hidden}
@@ -391,6 +417,16 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
 .d-lbl{color:var(--accent);white-space:nowrap;font-size:.67rem;text-transform:uppercase;letter-spacing:.04em}
 .d-val{color:var(--text-2);word-break:break-word}
 .d-body{color:var(--text-1);font-size:.8rem;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.review-box{margin:.8rem 0 1rem;padding:.7rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-2)}
+.review-row{display:grid;grid-template-columns:minmax(130px,190px) 1fr auto;gap:.5rem;align-items:start}
+.review-select,.review-notes{background:var(--bg-1);border:1px solid var(--border);border-radius:5px;color:var(--text-1);font:inherit;font-size:.76rem;padding:.38rem .5rem;min-width:0}
+.review-select:focus,.review-notes:focus{outline:none;border-color:var(--accent)}
+.review-notes{min-height:2.15rem;resize:vertical;line-height:1.4}
+.review-save{background:var(--accent);border:none;border-radius:5px;color:var(--bg-0);cursor:pointer;font-size:.75rem;font-weight:700;padding:.4rem .65rem;white-space:nowrap}
+.review-save:disabled{cursor:default;opacity:.45}
+.review-status{grid-column:1 / -1;color:var(--text-3);font-size:.65rem;min-height:.9rem}
+.review-status.ok{color:var(--ok)}
+.review-status.err{color:var(--danger)}
 
 /* ── Attachments ─────────────────────────────────────────────────────────── */
 .att-section{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border)}
@@ -429,6 +465,19 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 #statusbar{background:var(--bg-0);border-top:1px solid var(--border);padding:.18rem .9rem;font-size:.62rem;color:var(--text-3);display:flex;justify-content:space-between;flex-shrink:0}
+
+@media (max-width: 900px){
+  html,body{overflow:auto;height:auto}
+  body{min-height:100vh}
+  #app{flex-direction:column;overflow:visible}
+  #sidebar,#panel-mid,#panel-detail{width:100%;border-right:0}
+  #sidebar{max-height:38vh;border-bottom:1px solid var(--border)}
+  #panel-mid{min-height:42vh;border-bottom:1px solid var(--border)}
+  #panel-detail{min-height:60vh;overflow:visible}
+  .review-row{grid-template-columns:1fr}
+  .review-save{width:100%}
+  #statusbar{position:sticky;bottom:0}
+}
 </style>
 </head>
 <body>
@@ -591,6 +640,26 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
           <span class="d-lbl">Postfach</span> <span class="d-val"><?= esc($email['mailbox']) ?></span>
           <span class="d-lbl">Größe</span>    <span class="d-val"><?= fmtBytes((int)$email['total_size_bytes']) ?></span>
         </div>
+
+        <div class="review-box"
+             data-mailbox="<?= esc($email['mailbox']) ?>"
+             data-email-id="<?= esc($email['stable_id']) ?>">
+          <div class="review-row">
+            <select class="review-select" id="review-decision" aria-label="Review decision">
+              <option value="unsure" <?= (($reviewDecision['decision'] ?? '') === 'unsure' || !$reviewDecision) ? 'selected' : '' ?>>Unsure</option>
+              <option value="keep" <?= (($reviewDecision['decision'] ?? '') === 'keep') ? 'selected' : '' ?>>Keep</option>
+              <option value="delete" <?= (($reviewDecision['decision'] ?? '') === 'delete') ? 'selected' : '' ?>>Delete</option>
+            </select>
+            <textarea class="review-notes" id="review-notes" maxlength="5000" placeholder="Review notes"><?= esc((string)($reviewDecision['notes'] ?? '')) ?></textarea>
+            <button class="review-save" id="review-save" type="button">Save</button>
+            <div class="review-status" id="review-status">
+              <?php if ($reviewDecision): ?>
+                Saved <?= esc(substr((string)$reviewDecision['updated_at'], 0, 16)) ?>
+              <?php endif ?>
+            </div>
+          </div>
+        </div>
+
         <div class="d-body"><?= highlight(esc($email['body_text']?:'(kein Text)'),$q) ?></div>
 
         <?php if (!empty($email['attachments'])): ?>
@@ -767,6 +836,42 @@ document.querySelectorAll('a[href*="download.php"]').forEach(a=>{
     const u=new URL(a.href,location.href);
     logEvent({type:'download',sha256:u.searchParams.get('sha256')||''});
   });
+});
+
+// ── Review decision save ─────────────────────────────────────────────────
+document.getElementById('review-save')?.addEventListener('click',async()=>{
+  const box=document.querySelector('.review-box');
+  const decision=document.getElementById('review-decision');
+  const notes=document.getElementById('review-notes');
+  const btn=document.getElementById('review-save');
+  const status=document.getElementById('review-status');
+  const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
+  if(!box||!decision||!notes||!btn||!status)return;
+  btn.disabled=true;
+  status.className='review-status';
+  status.textContent='Saving...';
+  try{
+    const res=await fetch('/api/review-decision.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+      body:JSON.stringify({
+        mailbox:box.dataset.mailbox,
+        email_stable_id:box.dataset.emailId,
+        decision:decision.value,
+        notes:notes.value,
+      }),
+    });
+    const j=await res.json().catch(()=>({ok:false,error:'invalid_response'}));
+    if(!res.ok||!j.ok)throw new Error(j.error||'save_failed');
+    status.className='review-status ok';
+    status.textContent='Saved';
+    logEvent({type:'review_decision',id:box.dataset.emailId,decision:decision.value});
+  }catch(err){
+    status.className='review-status err';
+    status.textContent='Save failed';
+  }finally{
+    btn.disabled=false;
+  }
 });
 
 // ── Update check ──────────────────────────────────────────────────────────

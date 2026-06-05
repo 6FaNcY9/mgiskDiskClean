@@ -37,6 +37,15 @@ def test_env():
             PRIMARY KEY (mailbox, email_stable_id, sha256)
         )
     """)
+    conn.execute("""
+        CREATE TABLE vt_cache (
+            sha256     CHAR(64) PRIMARY KEY,
+            status     VARCHAR(32) NOT NULL,
+            scan_id    TEXT NOT NULL DEFAULT '',
+            positives  INTEGER NOT NULL DEFAULT 0,
+            scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.execute(
         "INSERT INTO archive_attachments (mailbox, email_stable_id, stored_path, sha256, mime, original_filename) VALUES (?, ?, ?, ?, ?, ?)",
         ("test_mailbox", "email1", f"test_mailbox/attachments/{sha256}_0.txt", sha256, "image/png", "test.png")
@@ -58,7 +67,7 @@ def test_env():
     )
     time.sleep(1)
     
-    yield "http://localhost:8082", sha256
+    yield "http://localhost:8082", sha256, db_path
     
     # Cleanup
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -66,7 +75,7 @@ def test_env():
     shutil.rmtree(tmp_dir)
 
 def test_download_inline_flag_respected(test_env):
-    base_url, sha256 = test_env
+    base_url, sha256, _db_path = test_env
     url = f"{base_url}/download.php?mailbox=test_mailbox&sha256={sha256}&inline=1"
     
     response = urllib.request.urlopen(url)
@@ -76,7 +85,7 @@ def test_download_inline_flag_respected(test_env):
     assert "test.png" in cd
 
 def test_download_attachment_by_default(test_env):
-    base_url, sha256 = test_env
+    base_url, sha256, _db_path = test_env
     url = f"{base_url}/download.php?mailbox=test_mailbox&sha256={sha256}"
     
     response = urllib.request.urlopen(url)
@@ -86,7 +95,7 @@ def test_download_attachment_by_default(test_env):
     assert "test.png" in cd
 
 def test_download_bypass_vt(test_env):
-    base_url, sha256 = test_env
+    base_url, sha256, db_path = test_env
     config_path = "web/config/local.php"
     with open(config_path, "r") as f:
         config_content = f.read()
@@ -95,13 +104,21 @@ def test_download_bypass_vt(test_env):
     new_config = config_content.replace("'db' => [", "'vt_api_key' => 'dummy', 'db' => [")
     with open(config_path, "w") as f:
         f.write(new_config)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT OR REPLACE INTO vt_cache (sha256, status, scan_id, positives) VALUES (?, ?, ?, ?)",
+        (sha256, "infected", "", 3),
+    )
+    conn.commit()
+    conn.close()
         
     try:
-        # Without bypass_vt, it should fail (500 because of dummy VT setup and display_errors=0)
+        # Without bypass_vt, the cached infected verdict blocks the download.
         url = f"{base_url}/download.php?mailbox=test_mailbox&sha256={sha256}"
         with pytest.raises(urllib.error.HTTPError) as excinfo:
             urllib.request.urlopen(url)
-        assert excinfo.value.code == 500
+        assert excinfo.value.code == 403
             
         # With bypass_vt, it should succeed
         url = f"{base_url}/download.php?mailbox=test_mailbox&sha256={sha256}&bypass_vt=1"
