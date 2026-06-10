@@ -40,7 +40,8 @@ if (!is_array($manifest) || empty($manifest['filename']) || empty($manifest['sha
     exit;
 }
 
-$filename = basename($manifest['filename']);
+$dbManifest = is_array($manifest['database'] ?? null) ? $manifest['database'] : $manifest;
+$filename = basename((string)($dbManifest['filename'] ?? ''));
 if (!preg_match('/^mrija-[\dT]+Z\.sql\.gz$/', $filename)) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'invalid_filename']);
@@ -49,25 +50,68 @@ if (!preg_match('/^mrija-[\dT]+Z\.sql\.gz$/', $filename)) {
 
 $dumpUrl = $updateUrl . '/updates/' . $filename;
 $tmpFile = sys_get_temp_dir() . '/' . $filename;
+$attachmentsManifest = is_array($manifest['attachments'] ?? null) ? $manifest['attachments'] : null;
+$attachmentsFile = '';
+$attachmentsTmp = '';
 
-// Download dump
-$ctx = stream_context_create(['http' => ['timeout' => 120]]);
-$bytes = @file_get_contents($dumpUrl, false, $ctx);
-if ($bytes === false) {
-    http_response_code(502);
-    echo json_encode(['ok' => false, 'error' => 'download_failed']);
+function downloadAndVerify(string $url, string $tmpFile, string $expectedSha256, string $errorPrefix): ?array
+{
+    $ctx = stream_context_create(['http' => ['timeout' => 1800]]);
+    $in = @fopen($url, 'rb', false, $ctx);
+    if ($in === false) {
+        return ['status' => 502, 'error' => $errorPrefix . '_download_failed'];
+    }
+    $out = @fopen($tmpFile, 'wb');
+    if ($out === false) {
+        fclose($in);
+        return ['status' => 500, 'error' => $errorPrefix . '_temp_failed'];
+    }
+    stream_copy_to_stream($in, $out);
+    fclose($in);
+    fclose($out);
+
+    $actual = hash_file('sha256', $tmpFile);
+    if (!hash_equals($expectedSha256, (string)$actual)) {
+        @unlink($tmpFile);
+        return ['status' => 422, 'error' => $errorPrefix . '_sha256_mismatch'];
+    }
+    return null;
+}
+
+set_time_limit(3600);
+
+// Download and verify DB first.
+$err = downloadAndVerify($dumpUrl, $tmpFile, (string)($dbManifest['sha256'] ?? ''), 'db');
+if ($err !== null) {
+    http_response_code((int)$err['status']);
+    echo json_encode(['ok' => false, 'error' => $err['error']]);
     exit;
 }
-file_put_contents($tmpFile, $bytes);
-unset($bytes);
 
-// Verify SHA-256
-$actual = hash_file('sha256', $tmpFile);
-if (!hash_equals($manifest['sha256'], (string)$actual)) {
-    @unlink($tmpFile);
-    http_response_code(422);
-    echo json_encode(['ok' => false, 'error' => 'sha256_mismatch']);
-    exit;
+// Download and verify attachments before applying DB, so partial updates are less likely.
+if ($attachmentsManifest !== null) {
+    $attachmentsFile = basename((string)($attachmentsManifest['filename'] ?? ''));
+    if (!preg_match('/^mrija-attachments-[\dT]+Z\.tar\.zst$/', $attachmentsFile)) {
+        @unlink($tmpFile);
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'invalid_attachments_filename']);
+        exit;
+    }
+    if (($attachmentsManifest['format'] ?? 'tar.zst') !== 'tar.zst') {
+        @unlink($tmpFile);
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'unsupported_attachments_format']);
+        exit;
+    }
+    $attachmentsTmp = sys_get_temp_dir() . '/' . $attachmentsFile;
+    $attachmentsUrl = $updateUrl . '/updates/' . $attachmentsFile;
+    $err = downloadAndVerify($attachmentsUrl, $attachmentsTmp, (string)($attachmentsManifest['sha256'] ?? ''), 'attachments');
+    if ($err !== null) {
+        @unlink($tmpFile);
+        http_response_code((int)$err['status']);
+        echo json_encode(['ok' => false, 'error' => $err['error']]);
+        exit;
+    }
 }
 
 $db   = $config['db'] ?? [];
@@ -77,8 +121,6 @@ $user = escapeshellarg($db['user'] ?? 'mailreview');
 $pass = escapeshellarg($db['password'] ?? '');
 $name = escapeshellarg($db['dbname'] ?? 'mailreview');
 
-set_time_limit(300);
-
 $cmd = "zcat " . escapeshellarg($tmpFile)
      . " | mysql -h $host -P $port -u $user -p$pass $name 2>&1";
 
@@ -87,13 +129,45 @@ $exitCode = 0;
 exec($cmd, $output, $exitCode);
 @unlink($tmpFile);
 
-// Clear the manifest session cache so next check-update returns fresh data
-unset($_SESSION['_update_manifest_cache'], $_SESSION['_update_manifest_ts']);
-
 if ($exitCode !== 0) {
+    if ($attachmentsTmp !== '') { @unlink($attachmentsTmp); }
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'mysql_failed', 'detail' => implode("\n", $output)]);
     exit;
 }
 
-echo json_encode(['ok' => true, 'version' => $manifest['version']]);
+$attachmentsInstalled = false;
+if ($attachmentsTmp !== '') {
+    $dataDir = rtrim((string)($config['data_dir'] ?? (getenv('DEVENV_ROOT') ? getenv('DEVENV_ROOT') . '/data' : '/app/data')), '/');
+    if (!is_dir($dataDir) && !mkdir($dataDir, 0755, true)) {
+        @unlink($attachmentsTmp);
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'data_dir_failed']);
+        exit;
+    }
+
+    $extractCmd = "tar --zstd --no-same-owner -xf "
+        . escapeshellarg($attachmentsTmp)
+        . " -C "
+        . escapeshellarg($dataDir)
+        . " 2>&1";
+    $extractOutput = [];
+    $extractExit = 0;
+    exec($extractCmd, $extractOutput, $extractExit);
+    @unlink($attachmentsTmp);
+    if ($extractExit !== 0) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'attachments_extract_failed', 'detail' => implode("\n", $extractOutput)]);
+        exit;
+    }
+    $attachmentsInstalled = true;
+}
+
+// Clear the manifest session cache so next check-update returns fresh data
+unset($_SESSION['_update_manifest_cache'], $_SESSION['_update_manifest_ts']);
+
+echo json_encode([
+    'ok' => true,
+    'version' => $manifest['version'],
+    'attachments' => $attachmentsInstalled,
+]);

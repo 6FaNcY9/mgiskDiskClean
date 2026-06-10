@@ -211,7 +211,8 @@
         echo "    4. import into MariaDB (archive_emails + archive_attachments)"
         echo ""
         echo "  Remote source: mrija_org@s16.thehost.com.ua:email/mrija.org/<mailbox>/.maildir/"
-        echo "  Real server sync requires SSH key auth (ssh-agent or ~/.ssh/config)."
+        echo "  SSH key: ''${MRIJA_REMOTE_SSH_KEY:-$HOME/.ssh/thehost_mrija}"
+        echo "  Override key with: MRIJA_REMOTE_SSH_KEY=/path/to/key sync-all"
         echo "  Password-in-.env support was removed on purpose."
         echo ""
         echo "Options:"
@@ -227,6 +228,7 @@
       MAILBOXES_FILE="$DEVENV_ROOT/data/mailboxes.txt"
       GLOBAL_INDEX_DIR="$DEVENV_ROOT/data/index"
       REMOTE_BASE="mrija_org@s16.thehost.com.ua:email/mrija.org"
+      REMOTE_SSH_KEY="''${MRIJA_REMOTE_SSH_KEY:-$HOME/.ssh/thehost_mrija}"
 
       SINGLE_MAILBOX=""
       SKIP_RSYNC=0
@@ -280,6 +282,26 @@
 
       mkdir -p "$GLOBAL_INDEX_DIR"
 
+      if [ "$SKIP_RSYNC" -eq 0 ]; then
+        if [ ! -r "$REMOTE_SSH_KEY" ]; then
+          echo "ERROR: SSH key not readable: $REMOTE_SSH_KEY"
+          echo "  Set MRIJA_REMOTE_SSH_KEY=/path/to/key or create ~/.ssh/thehost_mrija"
+          exit 1
+        fi
+        SSH_CMD="ssh -i $REMOTE_SSH_KEY -o IdentitiesOnly=yes"
+      fi
+
+      if [ "$SKIP_IMPORT" -eq 0 ]; then
+        IMPORT_SOCKET="''${MYSQL_UNIX_PORT:-$DEVENV_STATE/mysql.sock}"
+        if ! mariadb -u mailreview --socket="$IMPORT_SOCKET" -e "SELECT 1" mailreview >/dev/null 2>&1; then
+          echo "ERROR: MariaDB is not running or not reachable at: $IMPORT_SOCKET"
+          echo "  Run: db-start"
+          echo "  Then: db-migrate"
+          echo "  Then rerun: sync-all"
+          exit 1
+        fi
+      fi
+
       for MAILBOX in $MAILBOX_LIST; do
         echo ""
         echo "==> [sync-all] Processing mailbox: $MAILBOX"
@@ -291,7 +313,7 @@
           mkdir -p "$MAILDIR_DST"
           echo "    rsync from $REMOTE_BASE/$MAILBOX/.maildir/..."
           rsync -az --info=progress2 \
-            -e ssh \
+            -e "$SSH_CMD" \
             "$REMOTE_BASE/$MAILBOX/.maildir/" \
             "$MAILDIR_DST/" \
             || { echo "ERROR: rsync failed for $MAILBOX (configure SSH keys for $REMOTE_BASE)"; exit 1; }
@@ -328,10 +350,9 @@
         if [ "$SKIP_IMPORT" -eq 0 ]; then
           echo "    importing into MariaDB..."
           SQLITE_PATH="$DATA_ROOT/index.sqlite"
-          SOCK="''${MYSQL_UNIX_PORT:-$DEVENV_STATE/mysql.sock}"
           php "$DEVENV_ROOT/web/src/cli/import_archive.php" \
             --sqlite "$SQLITE_PATH" \
-            --socket "$SOCK" \
+            --socket "$IMPORT_SOCKET" \
             || { echo "ERROR: MariaDB import failed for $MAILBOX"; exit 1; }
           echo "    import done."
         else

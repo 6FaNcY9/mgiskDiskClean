@@ -78,9 +78,19 @@ if (!is_file($configPath)) {
 
 /** @var array<string,mixed> $config */
 $config = require $configPath;
-$dbCfg  = $config['db'] ?? [];
+$config = is_array($config) ? $config : [];
+$defaultSocket = getenv('MYSQL_UNIX_PORT') ?: (getenv('DEVENV_STATE') . '/mysql.sock');
+$dbCfg = array_merge([
+    'socket'   => $defaultSocket,
+    'host'     => '127.0.0.1',
+    'port'     => 3306,
+    'dbname'   => 'mailreview',
+    'user'     => 'mailreview',
+    'password' => '',
+    'charset'  => 'utf8mb4',
+], is_array($config['db'] ?? null) ? $config['db'] : []);
 
-$socket = $opts['socket'] ?? $dbCfg['socket'] ?? (getenv('MYSQL_UNIX_PORT') ?: (getenv('DEVENV_STATE') . '/mysql.sock'));
+$socket = $opts['socket'] ?? $dbCfg['socket'];
 
 // ── Connect to MySQL ─────────────────────────────────────────────────────────
 if ($socket && file_exists($socket)) {
