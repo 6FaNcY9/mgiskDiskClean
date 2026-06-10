@@ -57,7 +57,7 @@ function Invoke-Native {
 
 function Invoke-DockerCompose {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    Invoke-Native -FilePath "docker" -Arguments (@("compose") + $Arguments)
+    Invoke-Native -FilePath (Get-DockerCliExe) -Arguments (@("compose") + $Arguments)
 }
 
 function Read-EnvFile {
@@ -188,13 +188,14 @@ Restart Windows now, then run MrijaArchive-Install.cmd again.
 
 function Test-DockerReady {
     Repair-DockerCliConfig
-    if (!(Get-Command docker -ErrorAction SilentlyContinue)) {
+    $docker = Get-DockerCliExe
+    if (!$docker) {
         return $false
     }
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & docker info *> $null
+        & $docker info *> $null
         return ($LASTEXITCODE -eq 0)
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -235,8 +236,27 @@ function Get-DockerDesktopExe {
     return $null
 }
 
+function Get-DockerCliExe {
+    $cmd = Get-Command docker.exe -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
+
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Docker\Docker\resources\bin\docker.exe"),
+        (Join-Path $env:LOCALAPPDATA "Docker\resources\bin\docker.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path $candidate)) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
 function Test-DockerInstalled {
-    if (Get-Command docker -ErrorAction SilentlyContinue) {
+    if (Get-DockerCliExe) {
         return $true
     }
     if (Get-DockerDesktopExe) {
@@ -251,7 +271,7 @@ function Start-DockerDesktopAndWait {
         Write-Host "Starting Docker Desktop..."
         Start-Process -FilePath $dockerExe | Out-Null
     } else {
-        Write-Host "Docker CLI exists, waiting for Docker engine..."
+        Write-Host "Docker Desktop executable not found, waiting for Docker engine..."
     }
 
     Write-Host "Waiting for Docker Desktop to become ready..."
@@ -361,10 +381,14 @@ function Download-WithHash {
 
 function Wait-ForDatabase {
     Write-Host "Waiting for MariaDB..."
+    $docker = Get-DockerCliExe
+    if (!$docker) {
+        throw "docker.exe was not found after Docker Desktop startup."
+    }
     for ($i = 0; $i -lt 90; $i++) {
         Push-Location $InstallRoot
         try {
-            & docker compose exec -T db healthcheck.sh --connect --innodb_initialized *> $null
+            & $docker compose exec -T db healthcheck.sh --connect --innodb_initialized *> $null
             if ($LASTEXITCODE -eq 0) { return }
         } finally {
             Pop-Location
@@ -408,10 +432,14 @@ function New-ArchiveShortcut {
 
     $shortcutPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "Mrija Archive.lnk"
     $startScript = Join-Path $InstallRoot "Start-MrijaArchive.cmd"
+    $docker = Get-DockerCliExe
+    if (!$docker) {
+        $docker = "docker"
+    }
     $script = @"
 @echo off
 cd /d "$InstallRoot"
-docker compose up -d web
+"$docker" compose up -d web
 start "" "$Url"
 "@
     $script | Set-Content -Path $startScript -Encoding ascii
