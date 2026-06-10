@@ -3,6 +3,9 @@ reports/
 logs/
 nginx/.htpasswd
 nginx/nginx.pid
+__pycache__/
+*.py[cod]
+dist/
 
 # devenv
 .devenv/
