@@ -388,9 +388,16 @@ function Wait-ForDatabase {
     for ($i = 0; $i -lt 90; $i++) {
         Push-Location $InstallRoot
         try {
-            & $docker compose exec -T db healthcheck.sh --connect --innodb_initialized *> $null
-            if ($LASTEXITCODE -eq 0) { return }
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            $status = & $docker compose ps db --format "{{.Status}}" 2>$null
+            $exitCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousErrorActionPreference
+            if ($exitCode -eq 0 -and (($status -join " ") -match "healthy")) {
+                return
+            }
         } finally {
+            $ErrorActionPreference = "Stop"
             Pop-Location
         }
         Start-Sleep -Seconds 3
