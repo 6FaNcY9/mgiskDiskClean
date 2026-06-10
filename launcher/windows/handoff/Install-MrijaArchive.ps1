@@ -80,18 +80,54 @@ function Read-EnvFile {
 
 function Write-RuntimeEnv {
     param([hashtable]$Values, [string]$Path)
+    $existing = @{}
+    if (Test-Path $Path) {
+        $existing = Read-EnvFile -Path $Path
+    }
+
+    foreach ($key in @("COWORKER_PASSWORD_HASH", "ADMIN_PASSWORD_HASH")) {
+        if (
+            $Values.ContainsKey($key) -and
+            [string]::IsNullOrWhiteSpace([string]$Values[$key]) -and
+            $existing.ContainsKey($key) -and
+            ![string]::IsNullOrWhiteSpace([string]$existing[$key])
+        ) {
+            $Values[$key] = $existing[$key]
+        }
+    }
+
+    function Format-EnvValue {
+        param([string]$Value)
+        if ($null -eq $Value) { return "" }
+        $trimmed = $Value.Trim()
+        if (
+            ($trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) -or
+            ($trimmed.StartsWith('"') -and $trimmed.EndsWith('"'))
+        ) {
+            return $trimmed
+        }
+        if ($trimmed.Contains('$') -or $trimmed.Contains('#') -or $trimmed.Contains(' ')) {
+            return "'" + $trimmed.Replace("'", "''") + "'"
+        }
+        return $trimmed
+    }
+    function New-EnvLine {
+        param([string]$Key)
+        return $Key + "=" + (Format-EnvValue ([string]$Values[$Key]))
+    }
+
     $lines = @(
-        "MRIJA_DB_ROOT_PASSWORD=$($Values["MRIJA_DB_ROOT_PASSWORD"])",
-        "MRIJA_DB_NAME=$($Values["MRIJA_DB_NAME"])",
-        "MRIJA_DB_USER=$($Values["MRIJA_DB_USER"])",
-        "MRIJA_DB_PASSWORD=$($Values["MRIJA_DB_PASSWORD"])",
-        "MRIJA_WEB_PORT=$($Values["MRIJA_WEB_PORT"])",
-        "COWORKER_PASSWORD_HASH=$($Values["COWORKER_PASSWORD_HASH"])",
-        "ADMIN_PASSWORD_HASH=$($Values["ADMIN_PASSWORD_HASH"])",
-        "VT_API_KEY=$($Values["VT_API_KEY"])",
-        "UPDATE_SERVER_URL=$($Values["UPDATE_SERVER_URL"])",
-        "DO_LOG_URL=$($Values["DO_LOG_URL"])",
-        "DO_LOG_TOKEN=$($Values["DO_LOG_TOKEN"])"
+        (New-EnvLine "MRIJA_DB_ROOT_PASSWORD"),
+        (New-EnvLine "MRIJA_DB_NAME"),
+        (New-EnvLine "MRIJA_DB_USER"),
+        (New-EnvLine "MRIJA_DB_PASSWORD"),
+        (New-EnvLine "MRIJA_WEB_PORT"),
+        (New-EnvLine "COWORKER_PASSWORD_HASH"),
+        (New-EnvLine "ADMIN_PASSWORD_HASH"),
+        (New-EnvLine "VT_API_KEY"),
+        (New-EnvLine "UPDATE_SERVER_URL"),
+        (New-EnvLine "DO_LOG_URL"),
+        (New-EnvLine "DO_LOG_TOKEN")
     )
     $lines | Set-Content -Path $Path -Encoding utf8
 }
@@ -445,8 +481,9 @@ function New-ArchiveShortcut {
     }
     $script = @"
 @echo off
+title Mrija Archive
 cd /d "$InstallRoot"
-"$docker" compose up -d web
+"$docker" compose up -d
 start "" "$Url"
 "@
     $script | Set-Content -Path $startScript -Encoding ascii
@@ -518,6 +555,8 @@ if (!$SkipDataDownload) {
         -ExpectedSha256 $dbManifest.sha256
 
     if ($manifest.attachments -and $manifest.attachments.filename -and $manifest.attachments.sha256) {
+        Write-Step "Downloading archive attachments"
+        Write-Host "This file can be several GB. Keep this window open until extraction finishes."
         $attachmentsFile = Join-Path $cacheDir ([IO.Path]::GetFileName($manifest.attachments.filename))
         $attachmentsUrlOrPath = if ($manifest.attachments.url) { $manifest.attachments.url } else { "/updates/" + $manifest.attachments.filename }
         Download-WithHash `

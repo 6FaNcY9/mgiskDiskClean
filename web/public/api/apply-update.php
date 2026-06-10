@@ -27,20 +27,21 @@ $body     = (string)file_get_contents('php://input');
 $payload  = json_decode($body, true);
 $manifest = is_array($payload) ? ($payload['manifest'] ?? null) : null;
 
-// Fetch manifest fresh if not supplied in body
-if (!is_array($manifest) || empty($manifest['sha256'])) {
+// Fetch manifest fresh if not supplied in body. Manifests may either be the
+// database artifact directly or a wrapper with a nested "database" artifact.
+if (!is_array($manifest)) {
     $ctx = stream_context_create(['http' => ['timeout' => 8]]);
     $raw = @file_get_contents($updateUrl . '/updates/manifest.json', false, $ctx);
     $manifest = $raw ? json_decode($raw, true) : null;
 }
 
-if (!is_array($manifest) || empty($manifest['filename']) || empty($manifest['sha256'])) {
+$dbManifest = is_array($manifest['database'] ?? null) ? $manifest['database'] : $manifest;
+if (!is_array($manifest) || empty($dbManifest['filename']) || empty($dbManifest['sha256'])) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'no_manifest']);
     exit;
 }
 
-$dbManifest = is_array($manifest['database'] ?? null) ? $manifest['database'] : $manifest;
 $filename = basename((string)($dbManifest['filename'] ?? ''));
 if (!preg_match('/^mrija-[\dT]+Z\.sql\.gz$/', $filename)) {
     http_response_code(422);
