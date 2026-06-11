@@ -1,0 +1,40 @@
+<?php
+// Docker-free Windows/local client configuration.
+// The launcher writes MRIJA_DATA_DIR and MRIJA_SQLITE_PATH before starting PHP.
+$dataDir = $_ENV['MRIJA_DATA_DIR'] ?? getenv('MRIJA_DATA_DIR') ?: dirname(__DIR__, 2) . '/data';
+$sqlitePath = $_ENV['MRIJA_SQLITE_PATH'] ?? getenv('MRIJA_SQLITE_PATH') ?: $dataDir . '/client/mail_archive.sqlite';
+
+return [
+    'data_dir' => $dataDir,
+
+    'db' => [
+        'engine' => 'sqlite',
+        'path'   => $sqlitePath,
+        'user'   => '',
+        'password' => '',
+        'charset' => 'utf8mb4',
+    ],
+
+    'auth' => [
+        'enabled' => false,
+    ],
+
+    'coworker_password_hash' => $_ENV['COWORKER_PASSWORD_HASH'] ?? getenv('COWORKER_PASSWORD_HASH') ?: '',
+    'admin_password_hash'    => $_ENV['ADMIN_PASSWORD_HASH'] ?? getenv('ADMIN_PASSWORD_HASH') ?: '',
+    'vt_api_key'             => $_ENV['VT_API_KEY'] ?? getenv('VT_API_KEY') ?: '',
+
+    'update_server_url' => $_ENV['UPDATE_SERVER_URL'] ?? getenv('UPDATE_SERVER_URL') ?: '',
+    'do_log_url'        => $_ENV['DO_LOG_URL']        ?? getenv('DO_LOG_URL')        ?: '',
+    'do_log_token'      => $_ENV['DO_LOG_TOKEN']      ?? getenv('DO_LOG_TOKEN')      ?: '',
+
+    'session' => [
+        'name'     => 'mrija_client_session',
+        'lifetime' => 7200,
+    ],
+
+    'app' => [
+        'debug'          => false,
+        'timezone'       => 'UTC',
+        'items_per_page' => 50,
+    ],
+];
