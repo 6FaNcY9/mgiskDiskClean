@@ -2,13 +2,11 @@
 MrijaArchive.exe — no-terminal Windows launcher.
 
 Startup sequence:
-1. Detect / auto-install Docker Desktop
-2. Extract bundled app_bundle.zip to %APPDATA%\\MrijaArchive\\ (first run)
-3. Copy sibling data/ folder to app dir (first run)
-4. docker compose up -d
-5. Wait for MariaDB healthy
-6. docker compose run --rm app php web/src/cli/import_archive.php
-7. Open pywebview window → localhost:8080
+1. Extract bundled app_bundle.zip to %APPDATA%\\MrijaArchive\\ (first run)
+2. Copy sibling data/ folder to app dir (first run)
+3. Build a client SQLite DB from data/index/mail_index.sqlite when needed
+4. Start a local PHP server bound to 127.0.0.1
+5. Open pywebview window → localhost:8080
 """
 from __future__ import annotations
 
@@ -21,25 +19,21 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Callable
 
 # ── Platform guards ───────────────────────────────────────────────────────────
-# winreg and CREATE_NO_WINDOW only exist on Windows.
-# The module is also imported in Linux tests — guard those symbols.
+# CREATE_NO_WINDOW only exists on Windows.
+# The module is also imported in Linux tests — guard that symbol.
 if sys.platform == "win32":
-    import winreg
     _NO_WINDOW = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
 else:
-    winreg = None  # type: ignore[assignment]
     _NO_WINDOW = 0
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 APPDATA = Path(os.environ.get("APPDATA") or os.environ.get("HOME", "."))
 APP_DIR  = APPDATA / "MrijaArchive"
 WEB_URL  = "http://localhost:8080"
-DOCKER_DOWNLOAD_URL = (
-    "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
-)
+PHP_PORT = int(os.environ.get("MRIJA_WEB_PORT", "8080"))
+WEB_URL = f"http://localhost:{PHP_PORT}"
 
 # Locate bundled resources:
 # When running as a PyInstaller bundle, sys._MEIPASS is the temp extraction dir.
@@ -51,8 +45,13 @@ DATA_SRC   = (
     if getattr(sys, "frozen", False)
     else Path(__file__).parent.parent.parent / "data"
 )
+PHP_SRC = (
+    Path(sys.executable).parent / "php" / "php.exe"
+    if getattr(sys, "frozen", False)
+    else Path("php")
+)
 
-# Loading screen shown while Docker starts (served from memory, not from file)
+# Loading screen shown while the local PHP server starts.
 _LOADING_HTML = """<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8">
@@ -90,50 +89,6 @@ _STOPPED_HTML = """<!DOCTYPE html>
   <button onclick="window.pywebview.api.start_archive()">&#9654; Start Again</button>
 </div></body></html>"""
 
-
-# ── Docker detection ──────────────────────────────────────────────────────────
-
-def is_docker_installed() -> bool:
-    """Return True if Docker Desktop is installed and docker is on PATH."""
-    if sys.platform == "win32" and winreg is not None:
-        try:
-            winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\Docker Inc.\Docker Desktop",
-            )
-            return True
-        except OSError:
-            pass
-    return shutil.which("docker") is not None
-
-
-# ── Docker installer download ─────────────────────────────────────────────────
-
-def download_docker_installer(
-    progress: Callable[[int], None] | None = None,
-) -> Path:
-    """Download Docker Desktop installer to APP_DIR. Returns path to installer."""
-    APP_DIR.mkdir(parents=True, exist_ok=True)
-    dest = APP_DIR / "DockerDesktopInstaller.exe"
-
-    def _reporthook(block: int, block_size: int, total: int) -> None:
-        if progress and total > 0:
-            pct = min(100, int(block * block_size / total * 100))
-            progress(pct)
-
-    urllib.request.urlretrieve(DOCKER_DOWNLOAD_URL, dest, _reporthook)
-    return dest
-
-
-def run_docker_installer(installer: Path) -> None:
-    """Run Docker Desktop installer silently and wait for it to finish."""
-    subprocess.run(
-        [str(installer), "install", "--quiet"],
-        check=True,
-        creationflags=_NO_WINDOW,
-    )
-
-
 # ── App bundle + data ─────────────────────────────────────────────────────────
 
 def extract_app_bundle() -> None:
@@ -147,54 +102,94 @@ def extract_app_bundle() -> None:
 
 def copy_data() -> None:
     """Copy sibling data/ folder to APP_DIR/data/ (no-op if SQLite already there)."""
-    sqlite = APP_DIR / "data" / "index" / "mail_index.sqlite"
-    if sqlite.exists():
+    data_dir = APP_DIR / "data"
+    if data_dir.exists():
         return
     if DATA_SRC.exists():
-        shutil.copytree(str(DATA_SRC), str(APP_DIR / "data"), dirs_exist_ok=True)
+        shutil.copytree(str(DATA_SRC), str(data_dir), dirs_exist_ok=True)
 
 
-# ── Docker Compose management ─────────────────────────────────────────────────
+# ── Docker-free PHP + SQLite runtime ──────────────────────────────────────────
 
-def _compose(args: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run `docker compose <args>` from APP_DIR, no terminal window."""
-    return subprocess.run(
-        ["docker", "compose"] + args,
+def find_php_exe() -> Path | None:
+    """Find a PHP CLI binary for the local no-Docker web server."""
+    candidates = [
+        APP_DIR / "php" / "php.exe",
+        APP_DIR / "php" / "php",
+        PHP_SRC,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    found = shutil.which("php")
+    return Path(found) if found else None
+
+
+def write_client_config() -> None:
+    """Install the SQLite client config as web/config/local.php."""
+    src = APP_DIR / "web" / "config" / "local.php.client"
+    dest = APP_DIR / "web" / "config" / "local.php"
+    if not src.exists():
+        raise FileNotFoundError("Missing web/config/local.php.client in app bundle")
+    shutil.copyfile(src, dest)
+
+
+def build_client_database(php: Path) -> Path:
+    """Create data/client/mail_archive.sqlite from data/index/mail_index.sqlite."""
+    source = APP_DIR / "data" / "index" / "mail_index.sqlite"
+    output = APP_DIR / "data" / "client" / "mail_archive.sqlite"
+    if output.exists():
+        return output
+    if not source.exists():
+        raise FileNotFoundError(
+            "Missing data/index/mail_index.sqlite. Install a client data package first."
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            str(php),
+            str(APP_DIR / "web" / "src" / "cli" / "build_client_sqlite.php"),
+            "--source", str(source),
+            "--output", str(output),
+        ],
+        check=True,
         cwd=str(APP_DIR),
-        capture_output=True,
+        creationflags=_NO_WINDOW,
+    )
+    return output
+
+
+def start_php_server(php: Path, sqlite_path: Path) -> subprocess.Popen[str]:
+    """Start PHP's local web server on localhost only."""
+    env = os.environ.copy()
+    env["MRIJA_DATA_DIR"] = str(APP_DIR / "data")
+    env["MRIJA_SQLITE_PATH"] = str(sqlite_path)
+    return subprocess.Popen(
+        [
+            str(php),
+            "-S", f"127.0.0.1:{PHP_PORT}",
+            "-t", str(APP_DIR / "web" / "public"),
+        ],
+        cwd=str(APP_DIR),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         text=True,
         creationflags=_NO_WINDOW,
     )
 
 
-def start_containers() -> None:
-    _compose(["up", "-d"])
-
-
-def stop_containers() -> None:
-    _compose(["stop"])
-
-
-def wait_for_healthy(timeout: int = 60) -> bool:
-    """Poll docker compose ps until MariaDB reports healthy. Returns True on success."""
+def wait_for_web(timeout: int = 30) -> bool:
+    """Wait until the local PHP server responds."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        r = _compose(["ps", "--format", "{{.Status}}"])
-        if "healthy" in r.stdout.lower():
-            return True
-        time.sleep(2)
+        try:
+            with urllib.request.urlopen(WEB_URL, timeout=2) as response:
+                if 200 <= response.status < 500:
+                    return True
+        except Exception:
+            time.sleep(0.5)
     return False
-
-
-def run_import() -> None:
-    """Import SQLite archive into MySQL (idempotent — safe every launch)."""
-    _compose(
-        [
-            "run", "--rm", "app",
-            "php", "web/src/cli/import_archive.php",
-        ]
-    )
-
 
 # ── pywebview JS API ──────────────────────────────────────────────────────────
 
@@ -205,7 +200,6 @@ class _Api:
         self._window = None  # set after webview.create_window
 
     def stop_archive(self) -> None:
-        stop_containers()
         if self._window:
             self._window.load_html(_STOPPED_HTML)
             self._window.set_title("Mrija Archive — Stopped")
@@ -213,12 +207,8 @@ class _Api:
     def start_archive(self) -> None:
         if self._window:
             self._window.load_html(_LOADING_HTML)
-        start_containers()
-        if wait_for_healthy():
-            run_import()
-            if self._window:
-                self._window.load_url(WEB_URL)
-                self._window.set_title("Mrija Archive")
+            self._window.load_url(WEB_URL)
+            self._window.set_title("Mrija Archive")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -228,72 +218,35 @@ def main() -> None:
     from tkinter import messagebox
     import webview  # imported late so tests can mock it
 
-    # ── 1. Docker detection ───────────────────────────────────────────────
-    if not is_docker_installed():
-        root = tk.Tk()
-        root.withdraw()
-        answer = messagebox.askyesno(
-            "Docker Desktop Required",
-            "Mrija Archive needs Docker Desktop (one-time install, ~600 MB).\n\n"
-            "Download and install it now?",
-            icon="question",
-        )
-        root.destroy()
-        if not answer:
-            sys.exit(0)
-
-        # Show simple progress window
-        progress_win = tk.Tk()
-        progress_win.title("Installing Docker Desktop")
-        progress_win.geometry("420x110")
-        progress_win.resizable(False, False)
-        progress_win.configure(bg="#111827")
-        tk.Label(
-            progress_win, text="Downloading Docker Desktop…",
-            bg="#111827", fg="#e0e7ff", font=("Segoe UI", 10),
-        ).pack(pady=(18, 6))
-        from tkinter import ttk
-        bar = ttk.Progressbar(progress_win, length=360, mode="determinate")
-        bar.pack()
-        status_lbl = tk.Label(progress_win, text="0%", bg="#111827", fg="#6b7280",
-                               font=("Segoe UI", 8))
-        status_lbl.pack(pady=4)
-
-        installer_path: list[Path] = []
-
-        def _do_download() -> None:
-            def _progress(pct: int) -> None:
-                bar["value"] = pct
-                status_lbl.config(text=f"{pct}%")
-                progress_win.update_idletasks()
-            try:
-                p = download_docker_installer(_progress)
-                installer_path.append(p)
-            finally:
-                progress_win.after(0, progress_win.destroy)
-
-        threading.Thread(target=_do_download, daemon=True).start()
-        progress_win.mainloop()
-
-        if not installer_path:
-            messagebox.showerror("Download Failed", "Could not download Docker Desktop.")
-            sys.exit(1)
-
-        run_docker_installer(installer_path[0])
-
-        if not is_docker_installed():
-            messagebox.showerror(
-                "Installation Incomplete",
-                "Docker Desktop installation did not complete.\n"
-                "Please restart and try again.",
-            )
-            sys.exit(1)
-
-    # ── 2. Extract bundle + copy data ────────────────────────────────────
+    # ── 1. Extract bundle + copy data ────────────────────────────────────
     extract_app_bundle()
     copy_data()
+    write_client_config()
 
-    # ── 3. Create pywebview window (loading screen) ───────────────────────
+    php = find_php_exe()
+    if php is None:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "PHP Runtime Missing",
+            "Mrija Archive now runs without Docker, but the package must include PHP.\n\n"
+            "Rebuild the handoff package with a bundled PHP runtime.",
+        )
+        root.destroy()
+        sys.exit(1)
+
+    try:
+        sqlite_path = build_client_database(php)
+    except Exception as exc:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Archive Data Missing", str(exc))
+        root.destroy()
+        sys.exit(1)
+
+    server = start_php_server(php, sqlite_path)
+
+    # ── 2. Create pywebview window (loading screen) ───────────────────────
     api = _Api()
     window = webview.create_window(
         "Mrija Archive",
@@ -305,29 +258,27 @@ def main() -> None:
     )
     api._window = window
 
-    # ── 4. Start containers in background ────────────────────────────────
+    # ── 3. Wait for local web server in background ───────────────────────
     def _startup() -> None:
-        start_containers()
-        ok = wait_for_healthy(timeout=90)
+        ok = wait_for_web(timeout=30)
         if not ok:
             window.load_html(
                 '<body style="background:#111827;color:#f87171;font-family:sans-serif;'
                 'padding:3rem;text-align:center"><h2>Startup timed out</h2>'
-                "<p>Docker containers did not become healthy in 90 seconds.</p></body>"
+                "<p>The local web server did not become reachable.</p></body>"
             )
             window.set_title("Mrija Archive — Error")
             return
-        run_import()
         window.load_url(WEB_URL)
         window.set_title("Mrija Archive")
 
     threading.Thread(target=_startup, daemon=True).start()
 
-    # ── 5. Start webview (blocks until window closed) ─────────────────────
+    # ── 4. Start webview (blocks until window closed) ─────────────────────
     webview.start()
 
-    # ── 6. Stop containers on exit ────────────────────────────────────────
-    stop_containers()
+    # ── 5. Stop local server on exit ──────────────────────────────────────
+    server.terminate()
 
 
 if __name__ == "__main__":

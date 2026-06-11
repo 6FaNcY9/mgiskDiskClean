@@ -10,27 +10,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 import pytest
 
-# Patch winreg before importing — it doesn't exist on Linux
-sys.modules.setdefault("winreg", MagicMock())
 sys.modules.setdefault("webview", MagicMock())
 
 # Point to launcher source
 sys.path.insert(0, str(Path(__file__).parent.parent / "launcher" / "windows"))
 import app as launcher
-
-
-# ── is_docker_installed ────────────────────────────────────────────────────────
-
-def test_docker_installed_via_path(monkeypatch):
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None)
-    monkeypatch.setattr("sys.platform", "linux")
-    assert launcher.is_docker_installed() is True
-
-
-def test_docker_not_installed(monkeypatch):
-    monkeypatch.setattr("shutil.which", lambda _: None)
-    monkeypatch.setattr("sys.platform", "linux")
-    assert launcher.is_docker_installed() is False
 
 
 # ── extract_app_bundle ────────────────────────────────────────────────────────
@@ -87,9 +71,10 @@ def test_copy_data_copies_on_first_run(tmp_path, monkeypatch):
 
 def test_copy_data_skips_if_sqlite_exists(tmp_path, monkeypatch):
     app_dir = tmp_path / "MrijaArchive"
-    sqlite = app_dir / "data" / "index" / "mail_index.sqlite"
-    sqlite.parent.mkdir(parents=True)
-    sqlite.write_bytes(b"EXISTING")
+    data_dir = app_dir / "data"
+    data_dir.mkdir(parents=True)
+    marker = data_dir / "marker.txt"
+    marker.write_text("EXISTING")
     monkeypatch.setattr(launcher, "APP_DIR", app_dir)
 
     src = tmp_path / "data"
@@ -97,40 +82,82 @@ def test_copy_data_skips_if_sqlite_exists(tmp_path, monkeypatch):
 
     launcher.copy_data()
 
-    assert sqlite.read_bytes() == b"EXISTING"  # untouched
+    assert marker.read_text() == "EXISTING"  # untouched
 
 
-# ── wait_for_healthy ─────────────────────────────────────────────────────────
+# ── Docker-free PHP runtime ──────────────────────────────────────────────────
 
-def test_wait_for_healthy_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr(launcher, "APP_DIR", tmp_path)
-    call_count = [0]
+def test_find_php_exe_prefers_bundled_php(tmp_path, monkeypatch):
+    app_dir = tmp_path / "MrijaArchive"
+    bundled = app_dir / "php" / "php.exe"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_text("php")
+    monkeypatch.setattr(launcher, "APP_DIR", app_dir)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/php")
 
-    def _mock_compose(args):
-        call_count[0] += 1
-        r = MagicMock()
-        r.stdout = "healthy" if call_count[0] >= 2 else "starting"
-        return r
-
-    monkeypatch.setattr(launcher, "_compose", _mock_compose)
-    monkeypatch.setattr("time.sleep", lambda _: None)
-
-    result = launcher.wait_for_healthy(timeout=10)
-    assert result is True
-    assert call_count[0] == 2
+    assert launcher.find_php_exe() == bundled
 
 
-def test_wait_for_healthy_times_out(tmp_path, monkeypatch):
-    monkeypatch.setattr(launcher, "APP_DIR", tmp_path)
+def test_write_client_config_installs_local_php(tmp_path, monkeypatch):
+    app_dir = tmp_path / "MrijaArchive"
+    config_dir = app_dir / "web" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "local.php.client").write_text("client config")
+    monkeypatch.setattr(launcher, "APP_DIR", app_dir)
 
-    def _mock_compose(args):
-        r = MagicMock()
-        r.stdout = "starting"
-        return r
+    launcher.write_client_config()
 
-    monkeypatch.setattr(launcher, "_compose", _mock_compose)
-    monkeypatch.setattr("time.sleep", lambda _: None)
-    monkeypatch.setattr("time.monotonic", iter([0, 0.1, 0.2, 100]).__next__)
+    assert (config_dir / "local.php").read_text() == "client config"
 
-    result = launcher.wait_for_healthy(timeout=1)
-    assert result is False
+
+def test_build_client_database_runs_converter(tmp_path, monkeypatch):
+    app_dir = tmp_path / "MrijaArchive"
+    source = app_dir / "data" / "index" / "mail_index.sqlite"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"sqlite")
+    script = app_dir / "web" / "src" / "cli" / "build_client_sqlite.php"
+    script.parent.mkdir(parents=True)
+    script.write_text("<?php")
+    monkeypatch.setattr(launcher, "APP_DIR", app_dir)
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        output = app_dir / "data" / "client" / "mail_archive.sqlite"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"client")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = launcher.build_client_database(tmp_path / "php.exe")
+
+    assert result == app_dir / "data" / "client" / "mail_archive.sqlite"
+    assert calls
+    assert "--source" in calls[0][0]
+    assert "--output" in calls[0][0]
+
+
+def test_start_php_server_binds_localhost(tmp_path, monkeypatch):
+    app_dir = tmp_path / "MrijaArchive"
+    (app_dir / "web" / "public").mkdir(parents=True)
+    monkeypatch.setattr(launcher, "APP_DIR", app_dir)
+
+    calls = []
+
+    class FakeProc:
+        def terminate(self):
+            pass
+
+    def fake_popen(args, **kwargs):
+        calls.append((args, kwargs))
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+
+    proc = launcher.start_php_server(tmp_path / "php.exe", app_dir / "data" / "client" / "mail_archive.sqlite")
+
+    assert isinstance(proc, FakeProc)
+    assert "127.0.0.1:8080" in calls[0][0]
+    assert calls[0][1]["env"]["MRIJA_SQLITE_PATH"].endswith("mail_archive.sqlite")
+
