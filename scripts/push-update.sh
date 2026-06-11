@@ -9,8 +9,8 @@
 #   ATTACH_ARCHIVE_PATH=data/update-cache/mrija-attachments-<ts>.tar.zst ./scripts/push-update.sh
 #
 # Requires:
-#   - Local devenv MariaDB running (`db-start`) when DUMP_VIA=devenv
 #   - Docker Compose stack running locally when DUMP_VIA=compose
+#   - Local devenv MariaDB running (`db-start`) when DUMP_VIA=devenv
 #   - DO_RELAY_HOST set in environment or .env.push (e.g. "root@<ip>")
 #   - ~/.ssh/do_mrija SSH key for the droplet
 #   - rsync / ssh on PATH
@@ -68,7 +68,7 @@ DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${MRIJA_DB_NAME:-mailreview}"
 DB_USER="${MRIJA_DB_USER:-mailreview}"
 DB_PASS="${MRIJA_DB_PASSWORD:-}"
-DUMP_VIA="${DUMP_VIA:-devenv}"
+DUMP_VIA="${DUMP_VIA:-compose}"
 DB_SOCKET="${DB_SOCKET:-${MYSQL_UNIX_PORT:-${DEVENV_STATE:-}/mysql.sock}}"
 
 check_requirements() {
@@ -292,7 +292,8 @@ set -e
 cd /var/www/mrija/updates
 
 # Write fresh manifest.json
-cat > manifest.json <<JSON
+if [[ "${PUSH_ATTACHMENTS}" == "1" ]]; then
+    cat > manifest.json <<JSON
 {
   "version":    "${TIMESTAMP}",
   "filename":   "${DUMP_NAME}",
@@ -312,6 +313,22 @@ cat > manifest.json <<JSON
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 JSON
+else
+    cat > manifest.json <<JSON
+{
+  "version":    "${TIMESTAMP}",
+  "filename":   "${DUMP_NAME}",
+  "sha256":     "${SHA256}",
+  "url":        "/updates/${DUMP_NAME}",
+  "database": {
+    "filename": "${DUMP_NAME}",
+    "sha256":   "${SHA256}",
+    "url":      "/updates/${DUMP_NAME}"
+  },
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+fi
 
 # Keep only the $KEEP_DUMPS newest dumps (by filename, which is date-sorted)
 ls -1t mrija-*.sql.gz 2>/dev/null | tail -n +$((KEEP_DUMPS + 1)) | xargs -r rm -f
