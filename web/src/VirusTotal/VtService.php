@@ -101,6 +101,20 @@ class VtService
 
     private function upsert(string $sha256, string $status, string $scanId, int $positives): void
     {
+        $driver = $this->pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $this->pdo->prepare(
+                'INSERT INTO vt_cache (sha256, status, scan_id, positives, scanned_at)
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(sha256) DO UPDATE SET
+                   status     = excluded.status,
+                   scan_id    = excluded.scan_id,
+                   positives  = excluded.positives,
+                   scanned_at = CURRENT_TIMESTAMP'
+            )->execute([$sha256, $status, $scanId, $positives]);
+            return;
+        }
+
         $this->pdo->prepare(
             'INSERT INTO vt_cache (sha256, status, scan_id, positives, scanned_at)
              VALUES (?, ?, ?, ?, NOW())

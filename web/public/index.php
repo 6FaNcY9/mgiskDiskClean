@@ -26,9 +26,13 @@ if ($authEnabled) {
 }
 $csrf = new \MailReview\Auth\CsrfGuard();
 $csrfToken = $csrf->getToken();
+$currentRole = $sm->getRole();
 $db     = $config['db'] ?? [];
+$engine = $db['engine'] ?? 'mysql';
 $socket = $db['socket'] ?? '';
-if ($socket && file_exists($socket)) {
+if ($engine === 'sqlite') {
+    $dsn = 'sqlite:' . ($db['path'] ?? ':memory:');
+} elseif ($socket && file_exists($socket)) {
     $dsn = "mysql:unix_socket=$socket;dbname={$db['dbname']};charset={$db['charset']}";
 } else {
     $dsn = "mysql:host=" . ($db['host'] ?? '127.0.0.1') . ";port=" . ($db['port'] ?? 3306) .
@@ -111,8 +115,9 @@ if ($hasAtt) {
 }
 
 $attCountSubq = '(SELECT COUNT(*) FROM archive_attachments att WHERE att.mailbox = ae.mailbox AND att.email_stable_id = ae.stable_id)';
+$previewExpr = $engine === 'sqlite' ? 'substr(ae.body_text, 1, 200)' : 'LEFT(ae.body_text, 200)';
 $selectCols   = "ae.mailbox, ae.stable_id, ae.date, ae.from_addr, ae.subject,
-                 LEFT(ae.body_text, 200) AS preview,
+                 $previewExpr AS preview,
                  $attCountSubq AS att_count";
 
 // ── Query ─────────────────────────────────────────────────────────────────────
@@ -120,27 +125,53 @@ $results    = [];
 $totalFound = 0;
 
 if ($q !== '') {
-    $ftParams = array_merge([$q], $params);
-    $whereAnd = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
+    if ($engine === 'sqlite') {
+        $searchLike = '%' . mb_strtolower($q) . '%';
+        $searchClause = "(lower(ae.subject) LIKE ? OR lower(ae.from_addr) LIKE ?
+                         OR lower(ae.to_addrs) LIKE ? OR lower(ae.cc_addrs) LIKE ?
+                         OR lower(ae.body_text) LIKE ?)";
+        $searchParams = array_fill(0, 5, $searchLike);
+        $whereStr = 'WHERE ' . $searchClause;
+        if ($whereClauses) {
+            $whereStr .= ' AND ' . implode(' AND ', $whereClauses);
+        }
+        $queryParams = array_merge($searchParams, $params);
 
-    $countStmt = $pdo->prepare(
-        "SELECT COUNT(*) FROM archive_emails ae
-         WHERE MATCH(ae.subject, ae.from_addr, ae.to_addrs, ae.cc_addrs, ae.body_text)
-               AGAINST (? IN BOOLEAN MODE) $whereAnd"
-    );
-    $countStmt->execute($ftParams);
-    $totalFound = (int)$countStmt->fetchColumn();
+        $countStmt = $pdo->prepare("SELECT COUNT(*) FROM archive_emails ae $whereStr");
+        $countStmt->execute($queryParams);
+        $totalFound = (int)$countStmt->fetchColumn();
 
-    if (!$exportCsv) {
-        $stmt = $pdo->prepare(
-            "SELECT $selectCols
-             FROM archive_emails ae
+        if (!$exportCsv) {
+            $stmt = $pdo->prepare(
+                "SELECT $selectCols FROM archive_emails ae $whereStr
+                 ORDER BY $orderBy LIMIT $limit OFFSET $offset"
+            );
+            $stmt->execute($queryParams);
+            $results = $stmt->fetchAll();
+        }
+    } else {
+        $ftParams = array_merge([$q], $params);
+        $whereAnd = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
+
+        $countStmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM archive_emails ae
              WHERE MATCH(ae.subject, ae.from_addr, ae.to_addrs, ae.cc_addrs, ae.body_text)
-                   AGAINST (? IN BOOLEAN MODE) $whereAnd
-             ORDER BY $orderBy LIMIT $limit OFFSET $offset"
+                   AGAINST (? IN BOOLEAN MODE) $whereAnd"
         );
-        $stmt->execute($ftParams);
-        $results = $stmt->fetchAll();
+        $countStmt->execute($ftParams);
+        $totalFound = (int)$countStmt->fetchColumn();
+
+        if (!$exportCsv) {
+            $stmt = $pdo->prepare(
+                "SELECT $selectCols
+                 FROM archive_emails ae
+                 WHERE MATCH(ae.subject, ae.from_addr, ae.to_addrs, ae.cc_addrs, ae.body_text)
+                       AGAINST (? IN BOOLEAN MODE) $whereAnd
+                 ORDER BY $orderBy LIMIT $limit OFFSET $offset"
+            );
+            $stmt->execute($ftParams);
+            $results = $stmt->fetchAll();
+        }
     }
 } else {
     $whereStr = $whereClauses ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
@@ -179,17 +210,36 @@ if ($exportCsv) {
     $exportOffset = 0;
     while (true) {
         if ($q !== '') {
-            $ftParams = array_merge([$q], $params);
-            $whereAnd = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
-            $estmt = $pdo->prepare(
-                "SELECT ae.date, ae.from_addr, ae.to_addrs, ae.subject, ae.mailbox,
-                        $attCountSubq AS att_count, ae.total_size_bytes
-                 FROM archive_emails ae
-                 WHERE MATCH(ae.subject, ae.from_addr, ae.to_addrs, ae.cc_addrs, ae.body_text)
-                       AGAINST (? IN BOOLEAN MODE) $whereAnd
-                 ORDER BY $orderBy LIMIT $exportLimit OFFSET $exportOffset"
-            );
-            $estmt->execute($ftParams);
+            if ($engine === 'sqlite') {
+                $searchLike = '%' . mb_strtolower($q) . '%';
+                $searchClause = "(lower(ae.subject) LIKE ? OR lower(ae.from_addr) LIKE ?
+                                 OR lower(ae.to_addrs) LIKE ? OR lower(ae.cc_addrs) LIKE ?
+                                 OR lower(ae.body_text) LIKE ?)";
+                $whereStr = 'WHERE ' . $searchClause;
+                if ($whereClauses) {
+                    $whereStr .= ' AND ' . implode(' AND ', $whereClauses);
+                }
+                $queryParams = array_merge(array_fill(0, 5, $searchLike), $params);
+                $estmt = $pdo->prepare(
+                    "SELECT ae.date, ae.from_addr, ae.to_addrs, ae.subject, ae.mailbox,
+                            $attCountSubq AS att_count, ae.total_size_bytes
+                     FROM archive_emails ae $whereStr
+                     ORDER BY $orderBy LIMIT $exportLimit OFFSET $exportOffset"
+                );
+                $estmt->execute($queryParams);
+            } else {
+                $ftParams = array_merge([$q], $params);
+                $whereAnd = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
+                $estmt = $pdo->prepare(
+                    "SELECT ae.date, ae.from_addr, ae.to_addrs, ae.subject, ae.mailbox,
+                            $attCountSubq AS att_count, ae.total_size_bytes
+                     FROM archive_emails ae
+                     WHERE MATCH(ae.subject, ae.from_addr, ae.to_addrs, ae.cc_addrs, ae.body_text)
+                           AGAINST (? IN BOOLEAN MODE) $whereAnd
+                     ORDER BY $orderBy LIMIT $exportLimit OFFSET $exportOffset"
+                );
+                $estmt->execute($ftParams);
+            }
         } else {
             $whereStr = $whereClauses ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
             $estmt = $pdo->prepare(
@@ -517,7 +567,9 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
         <?= number_format($total) ?> gesamt<br>
         <span title="Letzter Import"><?= esc(substr((string)$lastImport,0,10)) ?></span>
       </span>
+      <?php if (!$authEnabled || $currentRole === 'admin'): ?>
       <button class="theme-btn" id="update-btn" onclick="checkUpdate(event)" title="Auf Updates prüfen">⟳</button>
+      <?php endif; ?>
       <button class="theme-btn" id="theme-btn" onclick="toggleThemePop(event)" title="Farbschema">🎨</button>
       <a href="/logout.php" class="theme-btn" title="Abmelden" style="text-decoration:none">⏻</a>
     </div>
@@ -734,7 +786,7 @@ kbd{background:var(--bg-2);border:1px solid var(--border);border-radius:3px;padd
 <!-- ── Status bar ──────────────────────────────────────────────────────── -->
 <div id="statusbar">
   <span><?= number_format($total) ?> E-Mails · Import: <?= esc(substr((string)$lastImport,0,10)) ?></span>
-  <span style="color:var(--text-3)">MariaDB · PHP</span>
+  <span style="color:var(--text-3)"><?= $engine === 'sqlite' ? 'SQLite' : 'MariaDB' ?> · PHP</span>
 </div>
 
 <!-- ── Update popover ──────────────────────────────────────────────────── -->
@@ -911,8 +963,8 @@ async function applyUpdate(manifest){
   try{
     const res=await fetch('/api/apply-update.php',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({manifest}),
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+      body:JSON.stringify({}),
     });
     const j=await res.json();
     if(j.ok){
