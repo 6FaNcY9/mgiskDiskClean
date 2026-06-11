@@ -6,15 +6,27 @@ if (!is_file($cfgPath)) { http_response_code(500); exit; }
 $config = require $cfgPath;
 
 spl_autoload_register(function (string $c): void {
-    $map = ['MailReview\\Auth\\SessionManager' => __DIR__ . '/../../src/Auth/SessionManager.php'];
+    $map = [
+        'MailReview\\Auth\\SessionManager' => __DIR__ . '/../../src/Auth/SessionManager.php',
+        'MailReview\\Auth\\CsrfGuard'      => __DIR__ . '/../../src/Auth/CsrfGuard.php',
+    ];
     if (isset($map[$c])) require_once $map[$c];
 });
 $sm = new \MailReview\Auth\SessionManager($config['session'] ?? []);
 $sm->start();
-if (!$sm->isAuthenticated()) { http_response_code(401); exit; }
+$authEnabled = $config['auth']['enabled'] ?? true;
+if ($authEnabled) {
+    if (!$sm->isAuthenticated()) { http_response_code(401); exit; }
+    if ($sm->getRole() !== 'admin') { http_response_code(403); exit; }
+}
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit; }
 
 header('Content-Type: application/json; charset=utf-8');
+
+$csrf = new \MailReview\Auth\CsrfGuard();
+if ($authEnabled) {
+    $csrf->enforce();
+}
 
 $updateUrl = rtrim((string)($config['update_server_url'] ?? ''), '/');
 if ($updateUrl === '') {
@@ -23,17 +35,11 @@ if ($updateUrl === '') {
     exit;
 }
 
-$body     = (string)file_get_contents('php://input');
-$payload  = json_decode($body, true);
-$manifest = is_array($payload) ? ($payload['manifest'] ?? null) : null;
-
-// Fetch manifest fresh if not supplied in body. Manifests may either be the
-// database artifact directly or a wrapper with a nested "database" artifact.
-if (!is_array($manifest)) {
-    $ctx = stream_context_create(['http' => ['timeout' => 8]]);
-    $raw = @file_get_contents($updateUrl . '/updates/manifest.json', false, $ctx);
-    $manifest = $raw ? json_decode($raw, true) : null;
-}
+// Always fetch the manifest from the configured update server. The browser may
+// display a cached copy, but it must not choose what artifact the server imports.
+$ctx = stream_context_create(['http' => ['timeout' => 8]]);
+$raw = @file_get_contents($updateUrl . '/updates/manifest.json', false, $ctx);
+$manifest = $raw ? json_decode($raw, true) : null;
 
 $dbManifest = is_array($manifest['database'] ?? null) ? $manifest['database'] : $manifest;
 if (!is_array($manifest) || empty($dbManifest['filename']) || empty($dbManifest['sha256'])) {
@@ -145,6 +151,33 @@ if ($attachmentsTmp !== '') {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'data_dir_failed']);
         exit;
+    }
+
+    $listCmd = "tar --zstd -tf " . escapeshellarg($attachmentsTmp) . " 2>&1";
+    $archiveMembers = [];
+    $listExit = 0;
+    exec($listCmd, $archiveMembers, $listExit);
+    if ($listExit !== 0) {
+        @unlink($attachmentsTmp);
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'attachments_list_failed', 'detail' => implode("\n", $archiveMembers)]);
+        exit;
+    }
+    foreach ($archiveMembers as $member) {
+        $member = trim((string)$member);
+        if (
+            $member === ''
+            || $member[0] === '/'
+            || str_contains($member, '\\')
+            || str_contains($member, '../')
+            || str_contains($member, '/..')
+            || !preg_match('#^mailboxes/[a-zA-Z0-9._-]+/attachments(?:/|$)#', $member)
+        ) {
+            @unlink($attachmentsTmp);
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'error' => 'unsafe_attachments_archive']);
+            exit;
+        }
     }
 
     $extractCmd = "tar --zstd --no-same-owner -xf "

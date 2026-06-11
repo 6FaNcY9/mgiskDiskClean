@@ -21,6 +21,15 @@ def test_env():
     with open(dummy_file_path, "w") as f:
         f.write("")
 
+    outside_sha256 = "f" * 64
+    outside_dir = os.path.join(data_dir, "mailboxes/test_mailbox/attachments_evil")
+    os.makedirs(outside_dir)
+    outside_file = os.path.join(outside_dir, "outside.txt")
+    with open(outside_file, "w") as f:
+        f.write("outside")
+    symlink_path = os.path.join(data_dir, "mailboxes/test_mailbox/attachments", f"{outside_sha256}_0.txt")
+    os.symlink(outside_file, symlink_path)
+
     # Setup SQLite DB
     db_path = os.path.join(tmp_dir, "test.sqlite")
     conn = sqlite3.connect(db_path)
@@ -49,6 +58,10 @@ def test_env():
     conn.execute(
         "INSERT INTO archive_attachments (mailbox, email_stable_id, stored_path, sha256, mime, original_filename) VALUES (?, ?, ?, ?, ?, ?)",
         ("test_mailbox", "email1", f"test_mailbox/attachments/{sha256}_0.txt", sha256, "image/png", "test.png")
+    )
+    conn.execute(
+        "INSERT INTO archive_attachments (mailbox, email_stable_id, stored_path, sha256, mime, original_filename) VALUES (?, ?, ?, ?, ?, ?)",
+        ("test_mailbox", "email2", f"test_mailbox/attachments/{outside_sha256}_0.txt", outside_sha256, "text/plain", "outside.txt")
     )
     conn.commit()
     conn.close()
@@ -129,3 +142,12 @@ def test_download_bypass_vt(test_env):
         # Restore config
         with open(config_path, "w") as f:
             f.write(config_content)
+
+def test_download_rejects_symlink_outside_attachment_dir(test_env):
+    base_url, _sha256, _db_path = test_env
+    outside_sha256 = "f" * 64
+    url = f"{base_url}/download.php?mailbox=test_mailbox&sha256={outside_sha256}"
+
+    with pytest.raises(urllib.error.HTTPError) as excinfo:
+        urllib.request.urlopen(url)
+    assert excinfo.value.code == 403

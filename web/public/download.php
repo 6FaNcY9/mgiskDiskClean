@@ -86,6 +86,7 @@ $filename    = basename($att['stored_path']);
 $filePath    = $dataDir . '/mailboxes/' . $mailbox . '/attachments/' . $filename;
 $realPath    = realpath($filePath);
 $allowedBase = realpath($dataDir . '/mailboxes/' . $mailbox . '/attachments');
+$allowedBase = $allowedBase === false ? false : rtrim($allowedBase, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
 // Path traversal guard
 if ($realPath === false || $allowedBase === false || strpos($realPath, $allowedBase) !== 0) {
