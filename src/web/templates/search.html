@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+
+{# ── Helper macros ───────────────────────────────────────────────────────────
+   Jinja2 macros are like functions you can call inside the template.
+   These replace the PHP helper functions (esc, fmtBytes, highlight, buildUrl). #}
+
+{% macro build_url(overrides={}) %}
+  {# Build a query string that keeps existing filter values while changing
+     only the keys in `overrides`.  Jinja can't return strings from macros,
+     so we use caller() — see call sites for usage pattern. #}
+{% endmacro %}
+
+{% block body %}
+<div id="app">
+
+  {# ── LEFT SIDEBAR ────────────────────────────────────────────────────── #}
+  <div id="sidebar">
+    <div class="sb-title">📧 Mrija Archive</div>
+
+    <div class="mb-list">
+      {# "All mailboxes" entry — links to / with no mailbox filter #}
+      <a class="mb-item {% if not filters.mailbox %}cur{% endif %}"
+         href="{{ url_for('search_page') }}{% if filters.q %}?q={{ filters.q | urlencode }}{% endif %}">
+        <span class="mb-name">Alle Postfächer</span>
+        <span class="mb-meta">{{ "{:,}".format(total_count) }} E-Mails</span>
+      </a>
+      <div class="mb-sep"></div>
+
+      {# One entry per mailbox from the mailbox_stats list #}
+      {% for ms in mailbox_stats %}
+        <a class="mb-item {% if filters.mailbox == ms.mailbox %}cur{% endif %}"
+           href="?mailbox={{ ms.mailbox | urlencode }}{% if filters.q %}&q={{ filters.q | urlencode }}{% endif %}">
+          <span class="mb-name">{{ ms.mailbox }}</span>
+          <span class="mb-meta">{{ "{:,}".format(ms.email_count) }} · {{ ms.total_bytes | fmt_bytes }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    <div class="sb-foot">
+      <span class="sb-stats">
+        {{ "{:,}".format(total_count) }} gesamt<br>
+        <span title="Letzter Import">{{ last_import[:10] if last_import else '—' }}</span>
+      </span>
+
+      {# The update button is only shown to admins #}
+      {% if role == 'admin' %}
+        <button class="theme-btn" id="update-btn" onclick="checkUpdate(event)" title="Auf Updates prüfen">⟳</button>
+      {% endif %}
+
+      <button class="theme-btn" id="theme-btn" onclick="toggleThemePop(event)" title="Farbschema">🎨</button>
+
+      {# Logout button — posts to /logout to destroy the session cookie #}
+      <form method="post" action="/logout" style="display:inline">
+        <button class="theme-btn" type="submit" title="Abmelden">⏻</button>
+      </form>
+    </div>
+  </div>
+
+  {# ── MIDDLE PANEL — search bar + email list ──────────────────────────── #}
+  <div id="panel-mid">
+    <div class="search-wrap">
+      <form id="sf" method="get" action="/" class="search-row">
+        {# Keep the mailbox filter when submitting a new search #}
+        {% if filters.mailbox %}
+          <input type="hidden" name="mailbox" value="{{ filters.mailbox }}">
+        {% endif %}
+        <input id="q" name="q" type="text" value="{{ filters.q }}"
+               placeholder="Suchen — Betreff, Absender, Text…" autocomplete="off">
+        <button class="search-btn" type="submit">↵</button>
+      </form>
+    </div>
+
+    <div class="filter-row">
+      <input type="date" form="sf" name="date_from" class="fi"
+             value="{{ filters.date_from }}" title="Von Datum">
+      <span class="date-sep">–</span>
+      <input type="date" form="sf" name="date_to" class="fi"
+             value="{{ filters.date_to }}" title="Bis Datum">
+
+      {# Attachment filter toggle — clicking flips has_att between 0 and 1 #}
+      <a class="att-toggle {% if filters.has_att %}on{% endif %}"
+         href="{{ url_with(request, has_att='0' if filters.has_att else '1', page='1') }}"
+         title="Nur E-Mails mit Anhängen">📎</a>
+
+      <select form="sf" name="sort" class="fi" onchange="document.getElementById('sf').submit()">
+        {% for key, label in sort_options.items() %}
+          <option value="{{ key }}" {% if filters.sort == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {# Result count / search summary #}
+    {% if found_count > 0 %}
+      <div class="list-head">
+        <span>
+          {{ offset + 1 }}–{{ [offset + results | length, found_count] | min }}
+          / {{ "{:,}".format(found_count) }}
+          {% if filters.q %} für <em>{{ filters.q }}</em>{% endif %}
+        </span>
+        <a href="{{ url_with(request, export='csv', page='') }}" title="Als CSV exportieren">⬇ CSV</a>
+      </div>
+    {% else %}
+      <div class="list-head">
+        <span>{% if filters.q %}Keine Ergebnisse für <em>{{ filters.q }}</em>{% else %}Keine E-Mails{% endif %}</span>
+      </div>
+    {% endif %}
+
+    {# Email list — each row is clickable and navigates to ?id=&smb= #}
+    <div class="email-list">
+      {% if not results %}
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <div>{% if filters.q %}Keine Treffer{% else %}Leer{% endif %}</div>
+        </div>
+      {% else %}
+        {% for r in results %}
+          {% set is_active = (r.stable_id == filters.selected_id and r.mailbox == filters.selected_mailbox) %}
+          {% set link = url_with(request, id=r.stable_id, smb=r.mailbox) %}
+          <div class="erow {% if is_active %}cur{% endif %}"
+               data-href="{{ link }}"
+               data-idx="{{ loop.index0 }}"
+               onclick="window.location=this.dataset.href">
+            <div class="e-subj">{{ r.subject or '(kein Betreff)' | highlight(filters.q) }}</div>
+            <div class="e-meta">
+              <span>{{ r.from_addr | highlight(filters.q) }}</span>
+              <span>·</span>
+              <span>{{ r.date[:10] }}</span>
+              {% if not filters.mailbox %}
+                <span class="mb-tag">{{ r.mailbox }}</span>
+              {% endif %}
+              {% if r.att_count %}
+                <span class="att-badge">📎{% if r.att_count > 1 %} {{ r.att_count }}{% endif %}</span>
+              {% endif %}
+            </div>
+            <div class="e-prev">{{ r.preview | highlight(filters.q) }}</div>
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    {# Pagination — shown only when there are multiple pages #}
+    {% if total_pages > 1 %}
+      <div class="pagination">
+        {% if filters.page > 1 %}
+          <a href="{{ url_with(request, page='1') }}">«</a>
+          <a href="{{ url_with(request, page=filters.page - 1) }}">‹</a>
+        {% else %}
+          <span class="dis">«</span><span class="dis">‹</span>
+        {% endif %}
+
+        {% set start = [1, filters.page - 2] | max %}
+        {% set end   = [total_pages, filters.page + 2] | min %}
+        {% if start > 1 %}<span>…</span>{% endif %}
+        {% for i in range(start, end + 1) %}
+          {% if i == filters.page %}
+            <span class="cur">{{ i }}</span>
+          {% else %}
+            <a href="{{ url_with(request, page=i) }}">{{ i }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if end < total_pages %}<span>…</span>{% endif %}
+
+        {% if filters.page < total_pages %}
+          <a href="{{ url_with(request, page=filters.page + 1) }}">›</a>
+          <a href="{{ url_with(request, page=total_pages) }}">»</a>
+        {% else %}
+          <span class="dis">›</span><span class="dis">»</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── DETAIL PANEL — selected email ───────────────────────────────────── #}
+  <div id="panel-detail">
+    {% if email %}
+      <div class="d-content">
+        <div class="d-subject">{{ email.subject or '(kein Betreff)' | highlight(filters.q) }}</div>
+
+        <div class="d-meta">
+          <span class="d-lbl">Von</span>      <span class="d-val">{{ email.from_addr | highlight(filters.q) }}</span>
+          <span class="d-lbl">An</span>       <span class="d-val">{{ email.to_addrs }}</span>
+          {% if email.cc_addrs %}
+            <span class="d-lbl">Cc</span>     <span class="d-val">{{ email.cc_addrs }}</span>
+          {% endif %}
+          <span class="d-lbl">Datum</span>    <span class="d-val">{{ email.date }}</span>
+          <span class="d-lbl">Postfach</span> <span class="d-val">{{ email.mailbox }}</span>
+          <span class="d-lbl">Größe</span>    <span class="d-val">{{ email.total_size_bytes | fmt_bytes }}</span>
+        </div>
+
+        {# Review decision widget — data attributes carry the IDs for the JS fetch #}
+        <div class="review-box"
+             data-mailbox="{{ email.mailbox }}"
+             data-email-id="{{ email.stable_id }}">
+          <div class="review-row">
+            <select class="review-select" id="review-decision" aria-label="Review decision">
+              <option value="unsure" {% if not review or review.decision == 'unsure' %}selected{% endif %}>Unsure</option>
+              <option value="keep"   {% if review and review.decision == 'keep' %}selected{% endif %}>Keep</option>
+              <option value="delete" {% if review and review.decision == 'delete' %}selected{% endif %}>Delete</option>
+            </select>
+            <textarea class="review-notes" id="review-notes" maxlength="5000"
+                      placeholder="Review notes">{{ review.notes if review else '' }}</textarea>
+            <button class="review-save" id="review-save" type="button">Save</button>
+            <div class="review-status" id="review-status">
+              {% if review %}Saved {{ review.updated_at[:16] }}{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-body">{{ email.body_text or '(kein Text)' | highlight(filters.q) }}</div>
+
+        {# Attachment list #}
+        {% if email.attachments %}
+          <div class="att-section">
+            <div class="att-sec-title">Anhänge ({{ email.attachments | length }})</div>
+            {% set multi = email.attachments | length > 1 %}
+            {% for a in email.attachments %}
+              {% set dl_url  = '/download?mailbox=' ~ a.mailbox | urlencode ~ '&sha256=' ~ a.sha256 %}
+              {% set in_url  = dl_url ~ '&inline=1' %}
+              {% set is_img  = a.mime in ['image/jpeg','image/png','image/gif','image/webp','image/svg+xml'] %}
+              {% set is_pdf  = a.mime == 'application/pdf' %}
+              {% set has_prev = is_img or is_pdf %}
+              {% set block_id = 'att-' ~ loop.index0 %}
+              <div class="att-block">
+                <div class="att-hdr" onclick="toggleAtt('{{ block_id }}')" id="{{ block_id }}-hdr">
+                  <span>📎</span>
+                  <span class="att-fname">{{ a.original_filename or a.stored_path | basename }}</span>
+                  <span class="att-fsize">{{ a.size | fmt_bytes }}</span>
+
+                  {% if a.vt_status == 'clean' %}
+                    <span class="vt-badge vt-clean">✓ Sauber</span>
+                  {% elif a.vt_status == 'infected' %}
+                    <span class="vt-badge vt-infected">⚠ Infiziert</span>
+                  {% elif a.vt_status == 'pending' %}
+                    <span class="vt-badge vt-pending">⏳</span>
+                  {% else %}
+                    <span class="vt-none">○</span>
+                  {% endif %}
+
+                  {% if a.vt_status == 'infected' %}
+                    <span class="att-blocked">Gesperrt</span>
+                  {% else %}
+                    <a class="att-dl" href="{{ dl_url }}" onclick="event.stopPropagation()">↓ Download</a>
+                  {% endif %}
+                </div>
+
+                {% if has_prev %}
+                  <div class="att-preview {% if not multi %}open{% endif %}" id="{{ block_id }}-prev">
+                    {% if is_img %}
+                      <img src="{{ in_url }}" alt="{{ a.original_filename }}"
+                           onclick="window.open('{{ dl_url }}','_blank')">
+                    {% else %}
+                      <iframe src="{{ in_url }}" loading="lazy"></iframe>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+    {% else %}
+      {# Placeholder shown when no email is selected #}
+      <div class="d-empty">
+        <div class="icon">✉️</div>
+        <div>E-Mail auswählen</div>
+        <div style="font-size:.68rem;color:var(--text-3);margin-top:.3rem">
+          <kbd>j</kbd><kbd>k</kbd> navigieren &nbsp;·&nbsp; <kbd>Enter</kbd> öffnen &nbsp;·&nbsp; <kbd>/</kbd> suchen
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+</div>{# /#app #}
+
+{# Status bar at the bottom #}
+<div id="statusbar">
+  <span>{{ "{:,}".format(total_count) }} E-Mails · Import: {{ last_import[:10] if last_import else '—' }}</span>
+  <span style="color:var(--text-3)">SQLite · Python</span>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Review decision save ──────────────────────────────────────────────────
+// When the user clicks "Save", send the decision to the server via fetch().
+// The CSRF token comes from the <meta> tag in base.html.
+document.getElementById('review-save')?.addEventListener('click', async () => {
+  const box      = document.querySelector('.review-box');
+  const decision = document.getElementById('review-decision');
+  const notes    = document.getElementById('review-notes');
+  const btn      = document.getElementById('review-save');
+  const status   = document.getElementById('review-status');
+  // Read the CSRF token that the server injected into the page's <meta> tag.
+  const csrf     = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  if (!box || !decision || !notes || !btn || !status) return;
+
+  btn.disabled = true;
+  status.className = 'review-status';
+  status.textContent = 'Saving...';
+
+  try {
+    const res = await fetch('/api/review-decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+      body: JSON.stringify({
+        mailbox:         box.dataset.mailbox,
+        email_stable_id: box.dataset.emailId,
+        decision:        decision.value,
+        notes:           notes.value,
+      }),
+    });
+    const j = await res.json().catch(() => ({ ok: false, error: 'invalid_response' }));
+    if (!res.ok || !j.ok) throw new Error(j.error || 'save_failed');
+    status.className = 'review-status ok';
+    status.textContent = 'Saved';
+    logEvent({ type: 'review_decision', id: box.dataset.emailId, decision: decision.value });
+  } catch (err) {
+    status.className = 'review-status err';
+    status.textContent = 'Save failed';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Update check ──────────────────────────────────────────────────────────
+// Asks the server (not the browser!) whether a new data package is available.
+async function checkUpdate(e) {
+  e.stopPropagation();
+  const btn  = document.getElementById('update-btn');
+  const pop  = document.getElementById('update-pop');
+  const body = document.getElementById('update-pop-body');
+  const r    = btn.getBoundingClientRect();
+  pop.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+  pop.style.left   = r.left + 'px';
+  pop.style.display = 'block';
+  body.innerHTML = '<span style="color:var(--text-3)">Prüfe auf Updates…</span>';
+  try {
+    const res = await fetch('/api/check-update');
+    const j   = await res.json();
+    if (!j.available) {
+      body.innerHTML = '<span style="color:var(--text-3)">Kein Update-Server konfiguriert.</span>';
+      return;
+    }
+    const m = j.manifest;
+    body.innerHTML = `<div style="margin-bottom:.5rem;font-weight:600;color:var(--text-1)">Update verfügbar</div>
+<div style="color:var(--text-3);margin-bottom:.75rem;font-size:.77rem">Version: ${m.version}</div>
+<button id="apply-update-btn" style="background:var(--accent);border:none;border-radius:5px;
+  color:#fff;cursor:pointer;font-size:.82rem;padding:.4rem .8rem;width:100%">
+  Jetzt installieren
+</button>`;
+    document.getElementById('apply-update-btn').onclick = () => applyUpdate(m);
+  } catch (err) {
+    body.innerHTML = '<span style="color:#c0606a">Fehler beim Prüfen.</span>';
+  }
+}
+
+async function applyUpdate(manifest) {
+  const body = document.getElementById('update-pop-body');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  body.innerHTML = '<span style="color:var(--text-3)">Installiere… bitte warten.</span>';
+  try {
+    const res = await fetch('/api/apply-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+      body: JSON.stringify({}),
+    });
+    const j = await res.json();
+    if (j.ok) {
+      body.innerHTML = '<span style="color:#6a9a6a">&#10003; Update installiert! Seite wird neu geladen…</span>';
+      logEvent({ type: 'update_applied', version: j.version });
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      body.innerHTML = `<span style="color:#c0606a">Fehler: ${j.error || 'unbekannt'}</span>`;
+    }
+  } catch (err) {
+    body.innerHTML = '<span style="color:#c0606a">Netzwerkfehler.</span>';
+  }
+}
+
+// ── Attachment preview toggle ─────────────────────────────────────────────
+function toggleAtt(id) {
+  const p = document.getElementById(id + '-prev');
+  if (p) p.classList.toggle('open');
+}
+
+// ── Keyboard navigation ───────────────────────────────────────────────────
+// j/k or arrow keys to move between emails; Enter to open; / to focus search.
+const rows = Array.from(document.querySelectorAll('.erow'));
+let fi = rows.findIndex(r => r.classList.contains('cur'));
+
+function moveFocus(d) {
+  const n = fi + d;
+  if (n < 0 || n >= rows.length) return;
+  fi = n;
+  rows[fi].scrollIntoView({ block: 'nearest' });
+  rows.forEach((r, i) => r.style.outline = i === fi ? '1px solid var(--accent)' : '');
+}
+
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+    if (e.key === 'Escape') document.activeElement.blur();
+    return;
+  }
+  switch (e.key) {
+    case 'j': case 'ArrowDown':  e.preventDefault(); moveFocus(+1); break;
+    case 'k': case 'ArrowUp':    e.preventDefault(); moveFocus(-1); break;
+    case 'Enter':                if (fi >= 0) window.location = rows[fi].dataset.href; break;
+    case '/':                    e.preventDefault(); document.getElementById('q').focus(); break;
+  }
+});
+
+// Log email open events
+document.querySelectorAll('.erow').forEach(r => {
+  r.addEventListener('click', () => logEvent({ type: 'email_opened', id: r.dataset.id || '' }));
+});
+document.getElementById('sf')?.addEventListener('submit', () => {
+  logEvent({ type: 'search', q: document.getElementById('q')?.value || '' });
+});
+document.querySelectorAll('a[href*="/download"]').forEach(a => {
+  a.addEventListener('click', () => {
+    const u = new URL(a.href, location.href);
+    logEvent({ type: 'download', sha256: u.searchParams.get('sha256') || '' });
+  });
+});
+</script>
+{% endblock %}

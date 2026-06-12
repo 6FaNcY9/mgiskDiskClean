@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mrija Archive — Login</title>
+<script>
+/* Apply stored theme before first paint (avoids colour flash). */
+(function(){
+  var a=localStorage.getItem('mrija-accent')||'';
+  var m=localStorage.getItem('mrija-mode')||'dark';
+  if(a)document.documentElement.setAttribute('data-accent',a);
+  if(m==='light')document.documentElement.setAttribute('data-mode','light');
+})();
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* Reuse the same colour variables as the main app so the login page
+   matches whatever theme the user has set. */
+:root{
+  --bg-1:#111111;--bg-2:#1a1a1a;--bg-3:#222222;
+  --border:#2a2a2a;
+  --text-1:#e8e8e8;--text-2:#888888;--text-3:#444444;
+  --accent:#c0c0c0;--accent-bg:rgba(192,192,192,.08);--accent-border:rgba(192,192,192,.22);
+  --danger:#c0606a;
+}
+[data-mode="light"]{
+  --bg-1:#f5f5f5;--bg-2:#ffffff;--bg-3:#e0e0e0;
+  --border:#d4d4d4;
+  --text-1:#1a1a1a;--text-2:#666666;--text-3:#aaaaaa;
+  --accent:#555555;--accent-bg:rgba(85,85,85,.07);--accent-border:rgba(85,85,85,.22);
+}
+[data-accent="blue"]  {--accent:#4a90d9;--accent-bg:rgba(74,144,217,.1);--accent-border:rgba(74,144,217,.3)}
+[data-accent="teal"]  {--accent:#2a9d8f;--accent-bg:rgba(42,157,143,.1);--accent-border:rgba(42,157,143,.3)}
+[data-accent="amber"] {--accent:#d4900a;--accent-bg:rgba(212,144,10,.1);--accent-border:rgba(212,144,10,.3)}
+[data-accent="sage"]  {--accent:#6a9f6a;--accent-bg:rgba(106,159,106,.1);--accent-border:rgba(106,159,106,.3)}
+[data-accent="rose"]  {--accent:#c0606a;--accent-bg:rgba(192,96,106,.1);--accent-border:rgba(192,96,106,.3)}
+
+body{background:var(--bg-1);color:var(--text-1);height:100vh;display:flex;
+     align-items:center;justify-content:center;font-family:system-ui,sans-serif}
+.card{background:var(--bg-2);border:1px solid var(--border);border-radius:10px;
+      padding:2rem 2.25rem;width:100%;max-width:340px}
+.logo{text-align:center;font-size:2rem;margin-bottom:.5rem}
+.title{text-align:center;font-size:1rem;font-weight:700;color:var(--text-1);margin-bottom:1.5rem}
+label{display:block;font-size:.75rem;color:var(--text-2);margin-bottom:.3rem}
+input[type=password]{width:100%;background:var(--bg-1);border:1px solid var(--border);
+  border-radius:6px;padding:.55rem .75rem;color:var(--text-1);font-size:.9rem;
+  outline:none;margin-bottom:1rem}
+input[type=password]:focus{border-color:var(--accent)}
+button{width:100%;background:var(--accent);color:var(--bg-1);border:none;
+  border-radius:6px;padding:.6rem;font-size:.9rem;font-weight:700;cursor:pointer}
+button:hover{opacity:.85}
+.err{background:rgba(192,96,106,.12);border:1px solid rgba(192,96,106,.3);
+     border-radius:6px;padding:.55rem .75rem;color:#c0606a;
+     font-size:.8rem;margin-bottom:1rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">📧</div>
+  <div class="title">Mrija Archive</div>
+
+  {# Show an error message if the login attempt failed. #}
+  {% if error %}
+    <div class="err">{{ error }}</div>
+  {% endif %}
+
+  {# The form posts to the same /login URL. #}
+  <form method="post" action="/login">
+    <label for="pw">Passwort</label>
+    <input id="pw" type="password" name="password" autofocus autocomplete="current-password">
+    <button type="submit">Anmelden</button>
+  </form>
+</div>
+</body>
+</html>
