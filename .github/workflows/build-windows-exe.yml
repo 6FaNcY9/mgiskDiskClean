@@ -29,17 +29,19 @@ jobs:
 
       - name: Install Python dependencies
         working-directory: launcher/windows
-        run: pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt
 
       - name: Download PHP NTS x64
         working-directory: launcher/windows
         shell: pwsh
         run: |
-          $phpUrl = "https://windows.php.net/downloads/releases/php-8.3-nts-Win32-vs16-x64-latest.zip"
-          $phpZip = "php-nts.zip"
-          Invoke-WebRequest -Uri $phpUrl -OutFile $phpZip
-          Expand-Archive -Path $phpZip -DestinationPath php -Force
-          Remove-Item $phpZip
+          $page = Invoke-WebRequest "https://windows.php.net/download/" -UseBasicParsing
+          $link = ($page.Links | Where-Object { $_.href -match "nts-Win32.*x64.*\.zip$" } | Select-Object -First 1).href
+          if ($link -notmatch "^http") { $link = "https://windows.php.net" + $link }
+          Write-Output "Downloading PHP from: $link"
+          Invoke-WebRequest -Uri $link -OutFile php-nts.zip -UseBasicParsing
+          Expand-Archive -Path php-nts.zip -DestinationPath php -Force
+          Remove-Item php-nts.zip
           if (-not (Test-Path "php\php.exe")) {
             Write-Error "php.exe not found after extraction"
             exit 1

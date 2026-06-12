@@ -6,7 +6,7 @@
 echo === MrijaArchive Windows Build ===
 
 :: Install Python deps
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 if %ERRORLEVEL% neq 0 (echo ERROR: pip install failed & exit /b 1)
 
 :: Build exe

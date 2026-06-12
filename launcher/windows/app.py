@@ -44,13 +44,9 @@ DATA_SRC   = (
     if getattr(sys, "frozen", False)
     else Path(__file__).parent.parent.parent / "data"
 )
-PHP_SRC = (
-    Path(sys.executable).parent / "php" / "php.exe"
-    if getattr(sys, "frozen", False)
-    else Path("php")
-)
+PHP_SRC = _HERE / "php" / "php.exe"
 
-UPDATE_SERVER_URL = os.environ.get("UPDATE_SERVER_URL", "").rstrip("/")
+UPDATE_SERVER_URL = os.environ.get("UPDATE_SERVER_URL", "http://104.248.242.243").rstrip("/")
 _LAST_VERSION_FILE = APP_DIR / "data" / ".last_version"
 
 # ── HTML screens ──────────────────────────────────────────────────────────────
@@ -84,6 +80,10 @@ _LOADING_HTML = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{_CSS_BASE}
   <div class="msg" id="msg">Starting<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
 </div></body></html>"""
 
+_download_btn = (
+    '<button onclick="window.pywebview.api.download_update()">⬇ Download from server</button>'
+    if UPDATE_SERVER_URL else ""
+)
 _NO_DATA_HTML = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{_CSS_BASE}</head>
 <body><div class="box">
   <div class="icon">📦</div>
@@ -91,10 +91,14 @@ _NO_DATA_HTML = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{_CSS_BASE}
   <div class="sub">Open a local archive file or download the latest data from the server.</div>
   <div>
     <button onclick="window.pywebview.api.open_file()">📂 Open local file&hellip;</button>
-    {"<button onclick=\"window.pywebview.api.download_update()\">⬇ Download from server</button>" if UPDATE_SERVER_URL else ""}
+    {_download_btn}
   </div>
 </div></body></html>"""
 
+_check_update_btn = (
+    '<button class="sec" onclick="window.pywebview.api.download_update()">⬇ Check for update</button>'
+    if UPDATE_SERVER_URL else ""
+)
 _STOPPED_HTML = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{_CSS_BASE}</head>
 <body><div class="box">
   <div class="icon">⏹</div>
@@ -102,7 +106,7 @@ _STOPPED_HTML = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{_CSS_BASE}
   <div>
     <button onclick="window.pywebview.api.start_archive()">▶ Start again</button>
     <button class="sec" onclick="window.pywebview.api.open_file()">📂 Open different file&hellip;</button>
-    {"<button class=\"sec\" onclick=\"window.pywebview.api.download_update()\">⬇ Check for update</button>" if UPDATE_SERVER_URL else ""}
+    {_check_update_btn}
   </div>
 </div></body></html>"""
 
@@ -147,6 +151,25 @@ def copy_data() -> None:
 
 # ── PHP + SQLite runtime ──────────────────────────────────────────────────────
 
+def _php_env(**extra: str) -> dict:
+    """Clean environment for PHP subprocesses.
+
+    PyInstaller injects _MEIPASS into PATH so Python C-extensions find their DLLs.
+    PHP inherits this PATH and loads VCRUNTIME140.dll v14.38 (Python's copy) instead
+    of the system v14.44 it was compiled against. Replace PATH entirely with
+    System32 so PHP always uses the system VC++ runtime.
+    """
+    sysroot = os.environ.get("SYSTEMROOT", "C:\\Windows")
+    env = os.environ.copy()
+    env["PATH"] = ";".join([
+        sysroot + "\\System32",
+        sysroot,
+        sysroot + "\\System32\\Wbem",
+    ])
+    env.update(extra)
+    return env
+
+
 def find_php_exe() -> Path | None:
     """Find a PHP CLI binary. Prefers bundled copy, falls back to PATH."""
     candidates = [APP_DIR / "php" / "php.exe", APP_DIR / "php" / "php", PHP_SRC]
@@ -155,6 +178,17 @@ def find_php_exe() -> Path | None:
             return c
     found = shutil.which("php")
     return Path(found) if found else None
+
+
+def write_php_ini(php: Path) -> None:
+    """Write php.ini next to php.exe to enable the SQLite PDO extension."""
+    ini = php.parent / "php.ini"
+    ini.write_text(
+        "[PHP]\n"
+        f"extension_dir={php.parent / 'ext'}\n"
+        "extension=pdo_sqlite\n"
+        "extension=sqlite3\n"
+    )
 
 
 def write_client_config() -> None:
@@ -178,29 +212,37 @@ def build_client_database(php: Path, source: Path | None = None, force: bool = F
             "No archive data found. Open a local .sqlite file or download from server."
         )
     output.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
+    result = subprocess.run(
         [
             str(php),
             str(APP_DIR / "web" / "src" / "cli" / "build_client_sqlite.php"),
             "--source", str(source),
             "--output", str(output),
         ],
-        check=True,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_php_env(),
         cwd=str(APP_DIR),
         creationflags=_NO_WINDOW,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "no output").strip()
+        raise RuntimeError(
+            f"build_client_sqlite.php failed (exit {result.returncode}):\n{detail}"
+        )
     return output
 
 
 def start_php_server(php: Path, sqlite_path: Path) -> subprocess.Popen[str]:
     """Start PHP's built-in server bound to 127.0.0.1 only."""
-    env = os.environ.copy()
-    env["MRIJA_DATA_DIR"]   = str(APP_DIR / "data")
-    env["MRIJA_SQLITE_PATH"] = str(sqlite_path)
     return subprocess.Popen(
         [str(php), "-S", f"127.0.0.1:{PHP_PORT}", "-t", str(APP_DIR / "web" / "public")],
         cwd=str(APP_DIR),
-        env=env,
+        env=_php_env(
+            MRIJA_DATA_DIR=str(APP_DIR / "data"),
+            MRIJA_SQLITE_PATH=str(sqlite_path),
+        ),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         text=True,
@@ -339,6 +381,7 @@ class _Api:
 
     def open_file(self) -> None:
         """Open a file picker and import the chosen .sqlite archive."""
+        import sqlite3
         import tkinter as tk
         from tkinter import filedialog
 
@@ -354,12 +397,28 @@ class _Api:
             return
 
         chosen_path = Path(chosen)
-        dest = APP_DIR / "data" / "index" / "mail_index.sqlite"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(chosen_path, dest)
-        # Remove old client DB so it gets rebuilt
-        client_db = APP_DIR / "data" / "client" / "mail_archive.sqlite"
-        client_db.unlink(missing_ok=True)
+
+        # Detect format: archive_emails = already client format; emails = source format
+        try:
+            with sqlite3.connect(str(chosen_path)) as conn:
+                tables = {r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )}
+        except Exception:
+            tables = set()
+
+        if "archive_emails" in tables:
+            # Already in client format — copy directly to output, skip PHP conversion
+            dest = APP_DIR / "data" / "client" / "mail_archive.sqlite"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(chosen_path, dest)
+            (APP_DIR / "data" / "index" / "mail_index.sqlite").unlink(missing_ok=True)
+        else:
+            # Source (Python indexer) format — copy and convert via build_client_sqlite.php
+            dest = APP_DIR / "data" / "index" / "mail_index.sqlite"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(chosen_path, dest)
+            (APP_DIR / "data" / "client" / "mail_archive.sqlite").unlink(missing_ok=True)
         threading.Thread(target=self._launch, daemon=True).start()
 
     def download_update(self) -> None:
@@ -456,6 +515,7 @@ def main() -> None:
         )
         root.destroy()
         sys.exit(1)
+    write_php_ini(php)
 
     api = _Api(php)
 

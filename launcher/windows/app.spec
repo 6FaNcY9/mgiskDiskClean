@@ -30,10 +30,13 @@ with zipfile.ZipFile(bundle_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
 
 # Bundle the PHP runtime as a sibling directory inside the frozen package.
 php_datas = []
+_SKIP_PHP_EXTS = {'php_pdo_firebird.dll'}
 if PHP_DIR.exists():
     for dirpath, dirnames, filenames in os.walk(str(PHP_DIR)):
         dirnames[:] = [d for d in dirnames if d not in ['__pycache__']]
         for fn in filenames:
+            if fn.lower() in _SKIP_PHP_EXTS:
+                continue
             fpath = os.path.join(dirpath, fn)
             arcname = os.path.relpath(fpath, str(Path(SPECPATH)))
             php_datas.append((fpath, str(Path(arcname).parent)))
@@ -53,6 +56,11 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher,
 )
+
+# PHP 8.5 requires VCRUNTIME140.dll v14.44; PyInstaller bundles v14.38 from Python 3.11.
+# Remove the conflicting copies — PHP falls back to the system VC++ redist (v14.44).
+_VC_DLLS = {'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll'}
+a.binaries = TOC([(n, p, t) for n, p, t in a.binaries if n.lower() not in _VC_DLLS])
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

@@ -173,10 +173,10 @@ SQL);
     $dst = null;
     $src = null;
 
-    @unlink($outputPath);
-    if (!rename($tmpPath, $outputPath)) {
-        throw new RuntimeException("could not move $tmpPath to $outputPath");
+    if (!copy($tmpPath, $outputPath)) {
+        throw new RuntimeException("could not copy $tmpPath to $outputPath");
     }
+    @unlink($tmpPath);
 
     fwrite(STDOUT, "Built client SQLite: $outputPath\n");
     fwrite(STDOUT, "Emails: $emailCount  Attachments: $attCount\n");
