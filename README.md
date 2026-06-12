@@ -244,6 +244,58 @@ These steps upload only the webroot to a shared hosting server.
    - `session.name`: change if hosting multiple apps on the same domain.
 3. **Never commit `local.php`** — it's in `.gitignore`.
 
+---
+
+## Producing a client update (Linux admin)
+
+The Windows client runs entirely from a local SQLite database. To get
+new emails to the client, you publish a database snapshot to a DigitalOcean
+droplet; the client downloads and verifies it automatically.
+
+### One-time setup
+
+```bash
+cp .env.push.example .env.push   # fill in DO_RELAY_HOST and DB credentials
+```
+
+### Sync, index, and publish
+
+```bash
+# 1. Sync mailboxes from the remote server
+sync-all --mailboxes-file data/mailboxes.txt
+
+# 2. Verify QA passes
+docker compose run --rm app bash docker/qa-archive-docker.sh
+
+# 3. Push a new SQLite snapshot to the droplet
+#    This creates mrija-<timestamp>.sql.gz, uploads it, and writes manifest.json.
+./scripts/push-update.sh
+
+# 4. (Optional) also push the attachment archive
+PUSH_ATTACHMENTS=1 ./scripts/push-update.sh
+```
+
+The client fetches `manifest.json`, compares the version against what it last
+applied, downloads the artifact if newer, verifies the SHA-256, and rebuilds
+its local database. No action needed on the client side.
+
+### Build the Windows package (first time or after code changes)
+
+```bash
+# On Windows (or GitHub Actions):
+cd launcher/windows
+build.bat          # downloads deps, runs PyInstaller
+package.bat        # zips exe + PHP runtime + sqlite data → MrijaArchive-v1.zip
+```
+
+PHP NTS x64 must be in `launcher/windows/php/` before running `build.bat`.
+Download from https://windows.php.net/download/ and unzip there.
+
+GitHub Actions (`build-windows-exe.yml`) does this automatically on push to
+`feature/docker-free-windows-client` or `main`.
+
+---
+
 ### Maintenance Mode
 
 To take the app offline (e.g. during DB migration):

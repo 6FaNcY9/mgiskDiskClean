@@ -23,6 +23,9 @@ web/config/local.php
 data/
 !data/mailboxes.txt.example
 
+# experimental Python web layer (tracked on wip/python-web-layer branch)
+src/web/
+
 # git worktrees
 .worktrees/
 
