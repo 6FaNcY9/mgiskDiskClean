@@ -1,19 +1,18 @@
 # .github/workflows/build-windows-exe.yml
-# Builds MrijaArchive.exe on a Windows runner and uploads it as an artifact.
-# Trigger: push to feature/mailbox-archive, or manually via workflow_dispatch.
-# Download the .exe from: Actions tab -> latest run -> Artifacts -> MrijaArchive-exe
+# Builds MrijaArchive.exe (Docker-free) on a Windows runner.
+# Trigger: push to feature/docker-free-windows-client or main, or manual.
+# Download from: Actions tab → latest run → Artifacts → MrijaArchive-exe
 
 name: Build Windows EXE
 
 on:
   push:
-    branches: [feature/mailbox-archive]
+    branches:
+      - feature/docker-free-windows-client
+      - main
     paths:
       - 'launcher/windows/**'
       - 'web/**'
-      - 'src/**'
-      - 'docker-compose.yml'
-      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
@@ -28,13 +27,37 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         working-directory: launcher/windows
         run: pip install -r requirements.txt
+
+      - name: Download PHP NTS x64
+        working-directory: launcher/windows
+        shell: pwsh
+        run: |
+          $phpUrl = "https://windows.php.net/downloads/releases/php-8.3-nts-Win32-vs16-x64-latest.zip"
+          $phpZip = "php-nts.zip"
+          Invoke-WebRequest -Uri $phpUrl -OutFile $phpZip
+          Expand-Archive -Path $phpZip -DestinationPath php -Force
+          Remove-Item $phpZip
+          if (-not (Test-Path "php\php.exe")) {
+            Write-Error "php.exe not found after extraction"
+            exit 1
+          }
+          Write-Output "PHP version: $(php\php.exe --version | Select-Object -First 1)"
 
       - name: Build exe
         working-directory: launcher/windows
         run: pyinstaller app.spec --noconfirm
+
+      - name: Verify exe exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "launcher\windows\dist\MrijaArchive.exe")) {
+            Write-Error "MrijaArchive.exe not found"
+            exit 1
+          }
+          Write-Output "Build size: $((Get-Item 'launcher\windows\dist\MrijaArchive.exe').Length) bytes"
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4
