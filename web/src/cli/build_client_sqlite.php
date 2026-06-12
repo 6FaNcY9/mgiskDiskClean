@@ -115,13 +115,13 @@ CREATE INDEX idx_review_decisions_decided_at ON review_decisions (decided_at);
 SQL);
 
     $emailInsert = $dst->prepare(
-        'INSERT INTO archive_emails
+        'INSERT OR IGNORE INTO archive_emails
          (mailbox, stable_id, filepath, folder, date, from_addr, to_addrs,
           cc_addrs, subject, body_text, total_size_bytes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $attInsert = $dst->prepare(
-        'INSERT INTO archive_attachments
+        'INSERT OR IGNORE INTO archive_attachments
          (mailbox, email_stable_id, stored_path, sha256, size, mime, original_filename)
          VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
