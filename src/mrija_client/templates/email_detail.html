@@ -1,0 +1,19 @@
+<div class="email-detail">
+  <h2>{{ email.subject }}</h2>
+  <p class="meta">From: {{ email.from_addr }}</p>
+  <p class="meta">To: {{ email.to_addrs }}</p>
+  {% if email.cc_addrs %}<p class="meta">CC: {{ email.cc_addrs }}</p>{% endif %}
+  <p class="meta">Date: {{ email.date }}</p>
+  <p class="meta">Mailbox: {{ email.mailbox }}</p>
+  {% if attachments %}
+  <div class="attachments">
+    <p class="meta">Attachments:</p>
+    {% for att in attachments %}
+    <a class="att-item" href="/data/attachment/{{ att.sha256 }}" download="{{ att.original_filename }}">
+      {{ att.original_filename }} ({{ (att.size / 1024)|round(1) }} KB)
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <pre class="body-text">{{ email.body_text }}</pre>
+</div>

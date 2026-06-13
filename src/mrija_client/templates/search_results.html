@@ -1,0 +1,12 @@
+{% for email in emails %}
+<article class="email-row"
+         hx-get="/data/email/{{ email.mailbox }}/{{ email.stable_id }}"
+         hx-target="#detail"
+         hx-swap="innerHTML">
+  <span class="from">{{ email.from_addr }}</span>
+  <span class="subject">{{ email.subject }}</span>
+  <span class="date">{{ email.date[:10] if email.date else "" }}</span>
+</article>
+{% else %}
+<p class="empty">No results.</p>
+{% endfor %}
