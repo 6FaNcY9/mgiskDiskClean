@@ -4,18 +4,15 @@ import time
 import webbrowser
 from mrija_client.state import AppState, ClientState
 
-try:
-    from rich.console import Console
-    from rich.live import Live
+import importlib.util
+_RICH = importlib.util.find_spec("rich") is not None
+
+
+def _make_panel(state: AppState, server_url: str):
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
-    _RICH = True
-except ImportError:
-    _RICH = False
 
-
-def _make_panel(state: AppState, server_url: str) -> "Panel":
     t = Table.grid(padding=(0, 1))
     t.add_column(style="bold cyan", min_width=14)
     t.add_column()
@@ -55,10 +52,15 @@ def run_tui(state: AppState, server_url: str) -> None:
             state.state = ClientState.STOPPED
         return
 
+    from rich.console import Console
+    from rich.live import Live
+
     console = Console()
     stop_event = threading.Event()
 
     def _keys() -> None:
+        import tempfile
+        from pathlib import Path
         while not stop_event.is_set():
             try:
                 line = input()
@@ -71,9 +73,8 @@ def run_tui(state: AppState, server_url: str) -> None:
                 state.state = ClientState.STOPPED
                 stop_event.set()
             elif cmd == "u":
-                import tempfile
                 from mrija_client.updater import run_update
-                dest = state.db_path.parent if state.db_path else __import__("pathlib").Path(tempfile.mkdtemp())
+                dest = state.db_path.parent if state.db_path else Path(tempfile.mkdtemp())
                 threading.Thread(target=run_update, args=(state, dest), daemon=True).start()
             elif cmd == "b":
                 webbrowser.open(server_url)
