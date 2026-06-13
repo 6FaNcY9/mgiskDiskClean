@@ -18,6 +18,12 @@
         pytest>=8.0
         reportlab>=4.0
         imap-tools>=1.6
+        fastapi>=0.110
+        uvicorn>=0.29
+        jinja2>=3.1
+        rich>=13.7
+        httpx>=0.27
+        python-multipart>=0.0.9
       '';
     };
   };
