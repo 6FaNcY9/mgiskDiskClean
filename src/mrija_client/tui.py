@@ -21,11 +21,14 @@ def _make_panel(state: AppState, server_url: str):
               "error": "red", "no_data": "dim"}.get(state.state.value, "white")
     t.add_row("State", Text(state.state.value, style=color))
 
-    if state.db:
-        stats = state.db.stats()
-        t.add_row("Emails", str(stats["email_count"]))
-        t.add_row("Attachments", str(stats["attachment_count"]))
-        t.add_row("Last updated", stats["last_updated"] or "—")
+    if state.db and state.state != ClientState.UPDATING:
+        try:
+            stats = state.db.stats()
+            t.add_row("Emails", str(stats["email_count"]))
+            t.add_row("Attachments", str(stats["attachment_count"]))
+            t.add_row("Last updated", stats["last_updated"] or "—")
+        except Exception:
+            pass
 
     if state.state == ClientState.UPDATING:
         filled = int(state.update_progress / 5)
