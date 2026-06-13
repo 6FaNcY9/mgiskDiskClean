@@ -56,30 +56,40 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
     state.state = ClientState.UPDATING
     state.update_progress = 0
     state.update_status = "Fetching manifest…"
+    state.log("Update started — fetching manifest…")
 
     try:
         manifest = fetch_manifest()
+        version = manifest.get("version", "?")
+        state.log(f"Manifest: version [cyan]{version}[/cyan]")
+
         url = UPDATE_SERVER + manifest["url"]
         gz_dest = dest_dir / manifest["filename"]
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         state.update_status = "Downloading archive…"
+        state.log(f"Downloading [cyan]{manifest['filename']}[/cyan]…")
 
         def _progress(done: int, total: int) -> None:
             state.update_progress = int(done / total * 90)
 
         download_archive(url, gz_dest, _progress)
+        state.log(f"Download complete ({gz_dest.stat().st_size // 1024:,} KB)")
 
         state.update_status = "Verifying checksum…"
+        state.log("Verifying SHA256…")
         if not verify_sha256(gz_dest, manifest["sha256"]):
             raise ValueError("SHA256 mismatch — download corrupted")
+        state.log("Checksum [green]OK[/green]")
 
         state.update_status = "Decompressing…"
         state.update_progress = 92
+        state.log("Decompressing archive…")
         sqlite_path = decompress_gz(gz_dest)
 
         state.update_status = "Applying update…"
         state.update_progress = 97
+        state.log("Swapping database…")
         if state.db:
             state.db.close()
         state.db = MailDB(sqlite_path)
@@ -90,8 +100,18 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
         state.update_status = "Done"
         state.state = ClientState.RUNNING
 
+        try:
+            s = state.db.stats()
+            state.log(
+                f"[green]Update complete[/green] — v{state.version}  |  "
+                f"{s['email_count']:,} emails, {s['attachment_count']:,} attachments"
+            )
+        except Exception:
+            state.log(f"[green]Update complete[/green] — v{state.version}")
+
     except Exception as exc:
         state.state = ClientState.ERROR
         state.error_message = str(exc)
         state.update_status = f"Error: {exc}"
+        state.log(f"[red]Update failed:[/red] {exc}")
         raise

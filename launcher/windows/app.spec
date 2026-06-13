@@ -1,66 +1,58 @@
 # launcher/windows/app.spec
-# PyInstaller spec for MrijaArchive.exe (Docker-free build)
+# PyInstaller spec for MrijaArchive.exe (pure Python — no PHP, no Docker)
 # Run from launcher/windows/ with: pyinstaller app.spec
-#
-# PHP runtime expected at launcher/windows/php/ before building.
-# Download NTS x64 from https://windows.php.net/download/ and unzip there.
 
-import os
 from pathlib import Path
+
 block_cipher = None
 
 REPO_ROOT = Path(SPECPATH).parent.parent
-PHP_DIR   = Path(SPECPATH) / 'php'
-
-# Build app_bundle.zip at spec-time.
-# Contents: web/ PHP app (without secrets), nothing Docker-related.
-import zipfile
-
-bundle_zip = os.path.join(SPECPATH, 'app_bundle.zip')
-with zipfile.ZipFile(bundle_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
-    for dirpath, dirnames, filenames in os.walk(str(REPO_ROOT / 'web')):
-        # Skip local.php (runtime secret) — local.php.client is included
-        dirnames[:] = [d for d in dirnames if d not in ['__pycache__', '.git']]
-        for fn in filenames:
-            if fn == 'local.php':
-                continue
-            fpath = os.path.join(dirpath, fn)
-            arcname = os.path.relpath(fpath, str(REPO_ROOT))
-            zf.write(fpath, arcname)
-
-# Bundle the PHP runtime as a sibling directory inside the frozen package.
-php_datas = []
-_SKIP_PHP_EXTS = {'php_pdo_firebird.dll'}
-if PHP_DIR.exists():
-    for dirpath, dirnames, filenames in os.walk(str(PHP_DIR)):
-        dirnames[:] = [d for d in dirnames if d not in ['__pycache__']]
-        for fn in filenames:
-            if fn.lower() in _SKIP_PHP_EXTS:
-                continue
-            fpath = os.path.join(dirpath, fn)
-            arcname = os.path.relpath(fpath, str(Path(SPECPATH)))
-            php_datas.append((fpath, str(Path(arcname).parent)))
+SRC_DIR   = REPO_ROOT / 'src'
 
 a = Analysis(
     ['app.py'],
-    pathex=[str(REPO_ROOT)],
+    pathex=[str(REPO_ROOT), str(SRC_DIR)],
     binaries=[],
     datas=[
-        (bundle_zip, '.'),   # app_bundle.zip alongside exe in _MEIPASS
-    ] + php_datas,           # php/ directory tree
-    hiddenimports=['webview'],
+        (str(SRC_DIR / 'mrija_client' / 'static'),    'mrija_client/static'),
+        (str(SRC_DIR / 'mrija_client' / 'templates'),  'mrija_client/templates'),
+    ],
+    hiddenimports=[
+        # mrija_client (lazy imports in server.py not visible to PyInstaller)
+        'mrija_client',
+        'mrija_client.api',
+        'mrija_client.api.data',
+        'mrija_client.api.control',
+        'mrija_client.db',
+        'mrija_client.server',
+        'mrija_client.state',
+        'mrija_client.updater',
+        'mrija_client.tui',
+        # pywebview Windows backend
+        'webview',
+        'webview.platforms.winforms',
+        # uvicorn internals (dynamic imports)
+        'uvicorn.logging',
+        'uvicorn.loops',
+        'uvicorn.loops.auto',
+        'uvicorn.protocols',
+        'uvicorn.protocols.http',
+        'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets',
+        'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan',
+        'uvicorn.lifespan.on',
+        # async backend
+        'anyio',
+        'anyio._backends._asyncio',
+    ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    excludes=['textual'],  # Linux TUI only — not needed in the Windows exe
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
 )
-
-# PHP 8.5 requires VCRUNTIME140.dll v14.44; PyInstaller bundles v14.38 from Python 3.11.
-# Remove the conflicting copies — PHP falls back to the system VC++ redist (v14.44).
-_VC_DLLS = {'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll'}
-a.binaries = TOC([(n, p, t) for n, p, t in a.binaries if n.lower() not in _VC_DLLS])
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

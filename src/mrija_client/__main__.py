@@ -32,6 +32,7 @@ def main() -> None:
     from mrija_client.server import create_app
 
     state = AppState()
+    state.log("[bold #818cf8]MrijaArchive[/bold #818cf8] starting…")
 
     if args.db:
         if not args.db.exists():
@@ -41,6 +42,15 @@ def main() -> None:
         state.db = MailDB(args.db)
         state.db_path = args.db
         state.state = ClientState.RUNNING
+        state.log(f"Database: [cyan]{args.db.name}[/cyan]")
+        try:
+            s = state.db.stats()
+            state.log(
+                f"Loaded [green]{s['email_count']:,}[/green] emails,"
+                f" [green]{s['attachment_count']:,}[/green] attachments"
+            )
+        except Exception:
+            pass
 
     app = create_app(state)
     server_url = f"http://{args.bind}:{args.port}"
@@ -50,6 +60,7 @@ def main() -> None:
         key = secrets.token_hex(16)
         os.environ["MRIJA_API_KEY"] = key
         print(f"API key (set MRIJA_API_KEY to reuse): {key}")
+        state.log(f"API key: [dim]{key[:8]}…[/dim]")
 
     import uvicorn
     config = uvicorn.Config(app, host=args.bind, port=args.port, log_level="warning")
@@ -62,6 +73,7 @@ def main() -> None:
         print("ERROR: server did not start", file=sys.stderr)
         sys.exit(1)
 
+    state.log(f"Server ready — [cyan]{server_url}[/cyan]")
     webbrowser.open(server_url)
 
     if args.no_tui:

@@ -1,5 +1,5 @@
 # .github/workflows/build-windows-exe.yml
-# Builds MrijaArchive.exe (Docker-free) on a Windows runner.
+# Builds MrijaArchive.exe (pure Python — FastAPI + pywebview, no PHP/Docker)
 # Trigger: push to feature/docker-free-windows-client or main, or manual.
 # Download from: Actions tab → latest run → Artifacts → MrijaArchive-exe
 
@@ -12,7 +12,7 @@ on:
       - main
     paths:
       - 'launcher/windows/**'
-      - 'web/**'
+      - 'src/mrija_client/**'
   workflow_dispatch:
 
 jobs:
@@ -30,23 +30,6 @@ jobs:
       - name: Install Python dependencies
         working-directory: launcher/windows
         run: python -m pip install -r requirements.txt
-
-      - name: Download PHP NTS x64
-        working-directory: launcher/windows
-        shell: pwsh
-        run: |
-          $page = Invoke-WebRequest "https://windows.php.net/download/" -UseBasicParsing
-          $link = ($page.Links | Where-Object { $_.href -match "nts-Win32.*x64.*\.zip$" } | Select-Object -First 1).href
-          if ($link -notmatch "^http") { $link = "https://windows.php.net" + $link }
-          Write-Output "Downloading PHP from: $link"
-          Invoke-WebRequest -Uri $link -OutFile php-nts.zip -UseBasicParsing
-          Expand-Archive -Path php-nts.zip -DestinationPath php -Force
-          Remove-Item php-nts.zip
-          if (-not (Test-Path "php\php.exe")) {
-            Write-Error "php.exe not found after extraction"
-            exit 1
-          }
-          Write-Output "PHP version: $(php\php.exe --version | Select-Object -First 1)"
 
       - name: Build exe
         working-directory: launcher/windows

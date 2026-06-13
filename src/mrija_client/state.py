@@ -1,5 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
+import queue
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -26,3 +28,8 @@ class AppState:
     update_status: str = ""
     error_message: str = ""
     version: str = ""
+    log_queue: queue.SimpleQueue = field(default_factory=queue.SimpleQueue)
+
+    def log(self, msg: str) -> None:
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.log_queue.put(f"[dim]{ts}[/dim]  {msg}")
