@@ -25,7 +25,7 @@ def db(tmp_path):
         INSERT INTO archive_emails VALUES
             ('box1','id1','f1','Inbox','2024-01-01','alice@x.com','bob@x.com',
              '','Hello world','body text one',1000,'2024-01-01'),
-            ('box1','id2','f2','Inbox','2024-01-02','bob@x.com','alice@x.com',
+            ('box1','id2','f2','Inbox','2024-01-02','bob@x.com','charlie@x.com',
              '','Invoice attached','invoice body',2000,'2024-01-02');
         INSERT INTO archive_attachments VALUES
             ('box1','id2','mailboxes/box1/attachments/abc.pdf',

@@ -22,9 +22,10 @@ class MailDB:
         rows = self._con.execute(
             """SELECT mailbox, stable_id, from_addr, subject, date
                FROM archive_emails
-               WHERE subject LIKE ? OR from_addr LIKE ? OR body_text LIKE ?
+               WHERE subject LIKE ? OR from_addr LIKE ? OR to_addrs LIKE ?
+                  OR body_text LIKE ?
                ORDER BY date DESC LIMIT ? OFFSET ?""",
-            (pattern, pattern, pattern, per_page, page * per_page),
+            (pattern, pattern, pattern, pattern, per_page, page * per_page),
         ).fetchall()
         return [dict(r) for r in rows]
 
