@@ -1,8 +1,6 @@
 import gzip
 import json
 import hashlib
-import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from mrija_client.updater import fetch_manifest, verify_sha256, decompress_gz
 
