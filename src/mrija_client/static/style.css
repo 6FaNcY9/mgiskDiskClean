@@ -32,3 +32,24 @@ nav a:hover { color: #e0e7ff; }
 .att-item { color: #a5b4fc; text-decoration: none; display: block;
             padding: .25rem 0; font-size: 13px; }
 .att-item:hover { color: #e0e7ff; }
+
+/* ── Status bar ─────────────────────────────────────────────────────────────── */
+#status-bar { display: flex; align-items: center; gap: .6rem; margin-left: auto; flex-shrink: 0; }
+.state-badge { font-size: 11px; font-weight: 700; padding: .2rem .55rem; border-radius: 10px;
+               letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.state-running  { background: #064e3b; color: #6ee7b7; }
+.state-updating { background: #451a03; color: #fde68a; }
+.state-error    { background: #450a0a; color: #fca5a5; }
+.state-no_data  { background: #1f2937; color: #9ca3af; }
+.state-starting { background: #1e3a5f; color: #93c5fd; }
+.state-stopped  { background: #1f2937; color: #6b7280; }
+.stat-count { color: #6b7280; font-size: 12px; white-space: nowrap; }
+.upd-wrap { width: 72px; height: 5px; background: #374151; border-radius: 3px; overflow: hidden; }
+.upd-bar  { height: 100%; background: #818cf8; border-radius: 3px; transition: width .4s; }
+.upd-btn  { background: #1e1b4b; color: #a5b4fc; border: 1px solid #3730a3;
+            border-radius: 6px; padding: .25rem .65rem; font-size: 12px; cursor: pointer;
+            white-space: nowrap; }
+.upd-btn:hover    { background: #312e81; color: #e0e7ff; }
+.upd-btn.htmx-request { opacity: .5; cursor: default; }
+.error-msg { color: #f87171; font-size: 12px; max-width: 180px;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

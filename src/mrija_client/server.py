@@ -1,8 +1,10 @@
 from __future__ import annotations
+import os
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from jinja2 import Template
 from mrija_client.state import AppState
 
 _HERE = Path(__file__).parent
@@ -49,6 +51,7 @@ def create_app(state: AppState) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
-        return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        tpl = Template((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+        return tpl.render(api_key=os.environ.get("MRIJA_API_KEY", "dev-key"))
 
     return app

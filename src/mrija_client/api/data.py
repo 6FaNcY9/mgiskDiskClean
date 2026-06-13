@@ -42,6 +42,33 @@ async def email_detail(mailbox: str, stable_id: str):
     return _render("email_detail.html", email=email, attachments=attachments)
 
 
+@router.get("/status-bar", response_class=HTMLResponse)
+async def status_bar():
+    from mrija_client.server import get_state
+    from mrija_client.state import ClientState
+    state = get_state()
+
+    is_updating = state.state == ClientState.UPDATING
+    email_count = None
+    if state.db and not is_updating:
+        try:
+            stats = state.db.stats()
+            email_count = f"{stats['email_count']:,}"
+        except Exception:
+            pass
+
+    return _render("status_bar.html",
+        state=state.state.value,
+        state_label=state.state.value.replace("_", " ").title(),
+        email_count=email_count,
+        progress=state.update_progress,
+        update_status=state.update_status,
+        error=state.error_message,
+        refresh_interval="1s" if is_updating else "3s",
+        is_updating=is_updating,
+    )
+
+
 @router.get("/attachment/{sha256}")
 async def download_attachment(sha256: str):
     from mrija_client.server import get_state
