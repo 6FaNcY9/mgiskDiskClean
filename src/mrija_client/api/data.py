@@ -14,19 +14,22 @@ def _render(name: str, **ctx) -> HTMLResponse:
 
 
 @router.get("/search", response_class=HTMLResponse)
-async def search(q: str = ""):
+async def search(q: str = "", page: int = 0):
+    q = q[:200]
+    page = max(0, page)
     from mrija_client.server import get_state
     state = get_state()
     emails = state.db.search(q) if state.db and q.strip() else []
-    return _render("search_results.html", emails=emails)
+    return _render("search_results.html", emails=emails, q=q, page=page)
 
 
 @router.get("/browse", response_class=HTMLResponse)
-async def browse(mailbox: str = ""):
+async def browse(mailbox: str = "", page: int = 0):
+    page = max(0, page)
     from mrija_client.server import get_state
     state = get_state()
     emails = state.db.browse(mailbox or None) if state.db else []
-    return _render("browse.html", emails=emails, mailbox=mailbox)
+    return _render("browse.html", emails=emails, mailbox=mailbox, page=page)
 
 
 @router.get("/email/{mailbox}/{stable_id}", response_class=HTMLResponse)

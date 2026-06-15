@@ -68,3 +68,17 @@ def test_email_detail(client):
 def test_email_detail_missing(client):
     r = client.get("/data/email/box1/nope")
     assert r.status_code == 404
+
+
+def test_search_query_capped_at_200_chars(client):
+    long_q = "a" * 500
+    r = client.get(f"/data/search?q={long_q}")
+    assert r.status_code == 200  # never crashes on long input
+
+def test_search_negative_page_returns_empty(client):
+    r = client.get("/data/search?q=test&page=-1")
+    assert r.status_code == 200  # clamped, not errored
+
+def test_browse_negative_page_returns_empty(client):
+    r = client.get("/data/browse?page=-99")
+    assert r.status_code == 200
