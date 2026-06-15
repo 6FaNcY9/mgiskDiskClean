@@ -31,9 +31,11 @@ class MailDB:
         params: list = []
 
         if q.strip():
-            pattern = f"%{q}%"
+            escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
             clauses.append(
-                "(subject LIKE ? OR from_addr LIKE ? OR to_addrs LIKE ? OR body_text LIKE ?)"
+                "(subject LIKE ? ESCAPE '\\' OR from_addr LIKE ? ESCAPE '\\'"
+                " OR to_addrs LIKE ? ESCAPE '\\' OR body_text LIKE ? ESCAPE '\\')"
             )
             params.extend([pattern, pattern, pattern, pattern])
 
