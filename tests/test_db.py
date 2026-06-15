@@ -1,6 +1,5 @@
 import sqlite3
 import pytest
-from pathlib import Path
 from mrija_client.db import MailDB
 
 

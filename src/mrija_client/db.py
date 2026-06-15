@@ -69,7 +69,7 @@ class MailDB:
 
     def browse(
         self,
-        mailbox: str | None,
+        mailbox: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         has_attachment: bool | None = None,
