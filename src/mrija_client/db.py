@@ -17,32 +17,96 @@ class MailDB:
         ).fetchone()[0]
         return {"email_count": ec, "attachment_count": ac, "last_updated": last or ""}
 
-    def search(self, q: str, page: int = 0, per_page: int = 50) -> list[dict]:
-        pattern = f"%{q}%"
+    def search(
+        self,
+        q: str,
+        mailbox: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        has_attachment: bool | None = None,
+        page: int = 0,
+        per_page: int = 50,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        params: list = []
+
+        if q.strip():
+            pattern = f"%{q}%"
+            clauses.append(
+                "(subject LIKE ? OR from_addr LIKE ? OR to_addrs LIKE ? OR body_text LIKE ?)"
+            )
+            params.extend([pattern, pattern, pattern, pattern])
+
+        if mailbox:
+            clauses.append("mailbox = ?")
+            params.append(mailbox)
+        if date_from:
+            clauses.append("date >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("date <= ?")
+            params.append(date_to)
+        if has_attachment is True:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM archive_attachments"
+                " WHERE email_stable_id = archive_emails.stable_id)"
+            )
+        elif has_attachment is False:
+            clauses.append(
+                "NOT EXISTS (SELECT 1 FROM archive_attachments"
+                " WHERE email_stable_id = archive_emails.stable_id)"
+            )
+
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.extend([per_page, page * per_page])
         rows = self._con.execute(
-            """SELECT mailbox, stable_id, from_addr, subject, date
-               FROM archive_emails
-               WHERE subject LIKE ? OR from_addr LIKE ? OR to_addrs LIKE ?
-                  OR body_text LIKE ?
-               ORDER BY date DESC LIMIT ? OFFSET ?""",
-            (pattern, pattern, pattern, pattern, per_page, page * per_page),
+            f"""SELECT mailbox, stable_id, from_addr, subject, date
+                FROM archive_emails {where}
+                ORDER BY date DESC LIMIT ? OFFSET ?""",
+            params,
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def browse(self, mailbox: str | None, page: int = 0, per_page: int = 50) -> list[dict]:
+    def browse(
+        self,
+        mailbox: str | None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        has_attachment: bool | None = None,
+        page: int = 0,
+        per_page: int = 50,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        params: list = []
+
         if mailbox:
-            rows = self._con.execute(
-                """SELECT mailbox, stable_id, from_addr, subject, date
-                   FROM archive_emails WHERE mailbox = ?
-                   ORDER BY date DESC LIMIT ? OFFSET ?""",
-                (mailbox, per_page, page * per_page),
-            ).fetchall()
-        else:
-            rows = self._con.execute(
-                """SELECT mailbox, stable_id, from_addr, subject, date
-                   FROM archive_emails ORDER BY date DESC LIMIT ? OFFSET ?""",
-                (per_page, page * per_page),
-            ).fetchall()
+            clauses.append("mailbox = ?")
+            params.append(mailbox)
+        if date_from:
+            clauses.append("date >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("date <= ?")
+            params.append(date_to)
+        if has_attachment is True:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM archive_attachments"
+                " WHERE email_stable_id = archive_emails.stable_id)"
+            )
+        elif has_attachment is False:
+            clauses.append(
+                "NOT EXISTS (SELECT 1 FROM archive_attachments"
+                " WHERE email_stable_id = archive_emails.stable_id)"
+            )
+
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.extend([per_page, page * per_page])
+        rows = self._con.execute(
+            f"""SELECT mailbox, stable_id, from_addr, subject, date
+                FROM archive_emails {where}
+                ORDER BY date DESC LIMIT ? OFFSET ?""",
+            params,
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def get_email(self, mailbox: str, stable_id: str) -> dict | None:

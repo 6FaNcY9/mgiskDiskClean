@@ -87,3 +87,41 @@ def test_get_attachment_by_sha256(db):
 def test_mailboxes(db):
     boxes = db.mailboxes()
     assert boxes == ["box1"]
+
+
+def test_search_filter_by_mailbox(db):
+    boxes = db.mailboxes()
+    if not boxes:
+        pytest.skip("no mailboxes in fixture db")
+    results = db.search("", mailbox=boxes[0])
+    assert all(r["mailbox"] == boxes[0] for r in results)
+
+def test_search_filter_date_from(db):
+    results_all = db.search("")
+    if not results_all:
+        pytest.skip("empty db")
+    latest_date = results_all[0]["date"]
+    results_filtered = db.search("", date_from=latest_date)
+    assert all(r["date"] >= latest_date for r in results_filtered)
+
+def test_search_filter_date_to(db):
+    results_all = db.search("")
+    if not results_all:
+        pytest.skip("empty db")
+    earliest_date = results_all[-1]["date"]
+    results_filtered = db.search("", date_to=earliest_date)
+    assert all(r["date"] <= earliest_date for r in results_filtered)
+
+def test_search_filter_has_attachment(db):
+    with_att = db.search("", has_attachment=True)
+    without_att = db.search("", has_attachment=False)
+    total = db.search("")
+    assert len(with_att) + len(without_att) == len(total)
+
+def test_browse_filter_date_from(db):
+    results_all = db.browse(None)
+    if not results_all:
+        pytest.skip("empty db")
+    latest_date = results_all[0]["date"]
+    results_filtered = db.browse(None, date_from=latest_date)
+    assert all(r["date"] >= latest_date for r in results_filtered)
