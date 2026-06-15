@@ -109,3 +109,10 @@ def test_mailboxes_option_selected(client):
     r = client.get("/data/mailboxes?selected=gabriel.hangel")
     assert r.status_code == 200
     assert "gabriel.hangel" in r.text
+
+def test_filters_endpoint_returns_sidebar(client):
+    r = client.get("/data/filters")
+    assert r.status_code == 200
+    assert "filter-form" in r.text
+    assert "date_from" in r.text
+    assert "has_attachment" in r.text

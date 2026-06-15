@@ -1,1 +1,37 @@
-<aside id="filters"></aside>
+<aside id="filters">
+  <form id="filter-form"
+        hx-get="/data/search"
+        hx-target="#results"
+        hx-push-url="true"
+        hx-trigger="change from:#filter-form, submit from:#filter-form">
+
+    <label class="filter-label">Mailbox</label>
+    <select name="mailbox" class="filter-select"
+            hx-get="/data/mailboxes"
+            hx-trigger="load"
+            hx-target="this"
+            hx-swap="innerHTML">
+      <option value="">Loading…</option>
+    </select>
+
+    <label class="filter-label">Date from</label>
+    <input type="date" name="date_from" class="filter-input"
+           value="{{ date_from or '' }}">
+
+    <label class="filter-label">Date to</label>
+    <input type="date" name="date_to" class="filter-input"
+           value="{{ date_to or '' }}">
+
+    <label class="filter-label">Attachments</label>
+    <select name="has_attachment" class="filter-select">
+      <option value="">Any</option>
+      <option value="true" {% if has_attachment == 'true' %}selected{% endif %}>With attachments</option>
+      <option value="false" {% if has_attachment == 'false' %}selected{% endif %}>Without</option>
+    </select>
+
+    <button type="reset" class="filter-reset"
+            hx-get="/data/search"
+            hx-target="#results"
+            hx-push-url="true">Clear</button>
+  </form>
+</aside>
