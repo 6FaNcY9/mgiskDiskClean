@@ -86,7 +86,6 @@ async def mailboxes_options(selected: str = ""):
     from mrija_client.server import get_state
     state = get_state()
     boxes = state.db.mailboxes() if state.db else []
-    selected_clean = html.escape(selected)
     if selected and selected not in boxes:
         boxes = [selected] + boxes
     opts = '<option value="">All mailboxes</option>'
