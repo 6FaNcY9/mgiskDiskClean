@@ -127,12 +127,6 @@ def test_browse_filter_date_from(db):
 
 
 def test_search_query_with_percent_literal(db):
-    # A literal '%' in the query must not act as a SQL wildcard
     results = db.search("%")
-    # The result should only contain emails whose fields literally contain '%'
-    for r in results:
-        # We can't easily assert the DB internals, but we can assert no crash
-        # and that the search returns consistently (same result twice)
-        pass
     results2 = db.search("%")
     assert results == results2
