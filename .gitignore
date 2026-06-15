@@ -33,3 +33,4 @@ src/web/
 .idea/
 .superpowers/
 .sisyphus/
+*.zip
