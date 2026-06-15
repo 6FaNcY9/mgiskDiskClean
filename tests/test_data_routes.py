@@ -82,3 +82,30 @@ def test_search_negative_page_returns_empty(client):
 def test_browse_negative_page_returns_empty(client):
     r = client.get("/data/browse?page=-99")
     assert r.status_code == 200
+
+
+def test_search_accepts_mailbox_param(client):
+    r = client.get("/data/search?q=&mailbox=gabriel.hangel")
+    assert r.status_code == 200
+
+def test_search_accepts_date_params(client):
+    r = client.get("/data/search?q=&date_from=2024-01-01&date_to=2024-12-31")
+    assert r.status_code == 200
+
+def test_search_accepts_has_attachment_param(client):
+    r = client.get("/data/search?q=&has_attachment=true")
+    assert r.status_code == 200
+
+def test_mailboxes_endpoint_returns_html(client):
+    r = client.get("/data/mailboxes")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+
+def test_browse_accepts_date_params(client):
+    r = client.get("/data/browse?date_from=2024-01-01")
+    assert r.status_code == 200
+
+def test_mailboxes_option_selected(client):
+    r = client.get("/data/mailboxes?selected=gabriel.hangel")
+    assert r.status_code == 200
+    assert "gabriel.hangel" in r.text

@@ -14,22 +14,89 @@ def _render(name: str, **ctx) -> HTMLResponse:
 
 
 @router.get("/search", response_class=HTMLResponse)
-async def search(q: str = "", page: int = 0):
+async def search(
+    q: str = "",
+    mailbox: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    has_attachment: str = "",
+    page: int = 0,
+):
     q = q[:200]
     page = max(0, page)
     from mrija_client.server import get_state
     state = get_state()
-    emails = state.db.search(q) if state.db and q.strip() else []
-    return _render("search_results.html", emails=emails, q=q, page=page)
+    att_filter: bool | None = (
+        True if has_attachment == "true" else
+        False if has_attachment == "false" else
+        None
+    )
+    emails = (
+        state.db.search(
+            q,
+            mailbox=mailbox or None,
+            date_from=date_from or None,
+            date_to=date_to or None,
+            has_attachment=att_filter,
+            page=page,
+        )
+        if state.db
+        else []
+    )
+    return _render("search_results.html", emails=emails, q=q, page=page,
+                   mailbox=mailbox, date_from=date_from, date_to=date_to,
+                   has_attachment=has_attachment)
 
 
 @router.get("/browse", response_class=HTMLResponse)
-async def browse(mailbox: str = "", page: int = 0):
+async def browse(
+    mailbox: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    has_attachment: str = "",
+    page: int = 0,
+):
     page = max(0, page)
     from mrija_client.server import get_state
     state = get_state()
-    emails = state.db.browse(mailbox or None) if state.db else []
-    return _render("browse.html", emails=emails, mailbox=mailbox, page=page)
+    att_filter: bool | None = (
+        True if has_attachment == "true" else
+        False if has_attachment == "false" else
+        None
+    )
+    emails = (
+        state.db.browse(
+            mailbox or None,
+            date_from=date_from or None,
+            date_to=date_to or None,
+            has_attachment=att_filter,
+            page=page,
+        )
+        if state.db
+        else []
+    )
+    return _render("browse.html", emails=emails, mailbox=mailbox, page=page,
+                   date_from=date_from, date_to=date_to,
+                   has_attachment=has_attachment)
+
+
+@router.get("/mailboxes", response_class=HTMLResponse)
+async def mailboxes_options(selected: str = ""):
+    from mrija_client.server import get_state
+    state = get_state()
+    boxes = state.db.mailboxes() if state.db else []
+    if selected and selected not in boxes:
+        boxes = [selected] + boxes
+    opts = '<option value="">All mailboxes</option>'
+    for b in boxes:
+        sel = ' selected' if b == selected else ''
+        opts += f'<option value="{b}"{sel}>{b}</option>'
+    return HTMLResponse(opts)
+
+
+@router.get("/filters", response_class=HTMLResponse)
+async def filters_sidebar():
+    return _render("filters_sidebar.html", date_from="", date_to="", has_attachment="")
 
 
 @router.get("/email/{mailbox}/{stable_id}", response_class=HTMLResponse)
