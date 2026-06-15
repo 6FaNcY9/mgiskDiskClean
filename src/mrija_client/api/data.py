@@ -150,6 +150,8 @@ async def download_attachment(sha256: str):
     att = state.db.get_attachment_by_sha256(sha256)
     if not att:
         raise HTTPException(404, "Attachment not found")
+    if not state.db_path:
+        raise HTTPException(503, "No database path")
     data_dir = state.db_path.parent.parent
     file_path = (data_dir / att["stored_path"]).resolve()
     if not str(file_path).startswith(str(data_dir.resolve())):
