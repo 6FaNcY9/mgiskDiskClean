@@ -1,4 +1,5 @@
 from __future__ import annotations
+import html
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -66,7 +67,7 @@ async def browse(
     )
     emails = (
         state.db.browse(
-            mailbox or None,
+            mailbox=mailbox or None,
             date_from=date_from or None,
             date_to=date_to or None,
             has_attachment=att_filter,
@@ -85,12 +86,14 @@ async def mailboxes_options(selected: str = ""):
     from mrija_client.server import get_state
     state = get_state()
     boxes = state.db.mailboxes() if state.db else []
+    selected_clean = html.escape(selected)
     if selected and selected not in boxes:
         boxes = [selected] + boxes
     opts = '<option value="">All mailboxes</option>'
     for b in boxes:
+        b_esc = html.escape(b)
         sel = ' selected' if b == selected else ''
-        opts += f'<option value="{b}"{sel}>{b}</option>'
+        opts += f'<option value="{b_esc}"{sel}>{b_esc}</option>'
     return HTMLResponse(opts)
 
 
