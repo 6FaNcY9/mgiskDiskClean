@@ -10,3 +10,22 @@
 {% else %}
 <p class="empty">No results.</p>
 {% endfor %}
+{% if emails or page > 0 %}
+<div class="pagination">
+  {% if page > 0 %}
+  <button class="page-btn"
+          hx-get="/data/search"
+          hx-vals='{"q": "{{ q }}", "mailbox": "{{ mailbox }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "has_attachment": "{{ has_attachment }}", "page": {{ page - 1 }}}'
+          hx-target="#results"
+          hx-push-url="true">← Prev</button>
+  {% endif %}
+  <span class="page-info page-btn">Page {{ page + 1 }}</span>
+  {% if emails|length == 50 %}
+  <button class="page-btn"
+          hx-get="/data/search"
+          hx-vals='{"q": "{{ q }}", "mailbox": "{{ mailbox }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "has_attachment": "{{ has_attachment }}", "page": {{ page + 1 }}}'
+          hx-target="#results"
+          hx-push-url="true">Next →</button>
+  {% endif %}
+</div>
+{% endif %}

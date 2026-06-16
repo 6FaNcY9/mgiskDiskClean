@@ -116,3 +116,13 @@ def test_filters_endpoint_returns_sidebar(client):
     assert "filter-form" in r.text
     assert "date_from" in r.text
     assert "has_attachment" in r.text
+
+def test_search_results_has_pagination(client):
+    r = client.get("/data/search?q=&page=0")
+    assert r.status_code == 200
+    assert "page-btn" in r.text
+
+def test_browse_has_pagination(client):
+    r = client.get("/data/browse?page=0")
+    assert r.status_code == 200
+    assert "page-btn" in r.text
