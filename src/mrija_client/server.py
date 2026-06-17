@@ -60,10 +60,17 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
 
     @app.get("/admin", response_class=HTMLResponse)
     async def admin_page():
+        if mode != "admin":
+            from fastapi import Response
+            return Response(status_code=404)
         tpl = Template((STATIC_DIR / "admin.html").read_text(encoding="utf-8"))
+        droplet_url = os.environ.get("MRIJA_DROPLET_URL", "")
+        droplet_key = os.environ.get("MRIJA_DROPLET_KEY", "")
         return tpl.render(
             api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
             db_path=str(state.db_path) if state.db_path else "no database",
+            droplet_url=droplet_url,
+            has_droplet=bool(droplet_url and droplet_key),
         )
 
     return app

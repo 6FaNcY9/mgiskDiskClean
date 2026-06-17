@@ -92,6 +92,14 @@
     .badge-no_data  { background: #1e293b; color: #64748b; }
 
     .hint { color: #334155; font-size: 11px; }
+    .log-section-label {
+      font-size: 10px; font-weight: 700; color: #6366f1;
+      text-transform: uppercase; letter-spacing: .08em;
+      padding: .5rem 0 .2rem;
+      border-top: 1px solid #1e293b;
+      margin-top: .25rem;
+    }
+    .log-section-label:first-child { border-top: none; margin-top: 0; }
   </style>
 </head>
 <body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
@@ -118,21 +126,31 @@
   </div>
 
   <div id="log-wrap">
+    <div class="log-section-label">Local</div>
     <div id="log-entries"
          hx-get="/data/logs"
          hx-trigger="load, every 2s"
          hx-swap="innerHTML">
       <div class="log-line hint">Waiting for log entries…</div>
     </div>
+
+    {% if has_droplet %}
+    <div class="log-section-label">Droplet &mdash; {{ droplet_url }}</div>
+    <div id="droplet-log-entries"
+         hx-get="/data/droplet-logs"
+         hx-trigger="load, every 5s"
+         hx-swap="innerHTML">
+      <div class="log-line hint">Fetching droplet logs…</div>
+    </div>
+    {% endif %}
+
     <div id="scroll-anchor"></div>
   </div>
 
   <script>
-    // Auto-scroll to bottom after each log refresh
     document.body.addEventListener('htmx:afterSwap', function(e) {
-      if (e.detail.target.id === 'log-entries') {
-        const anchor = document.getElementById('scroll-anchor');
-        if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
+      if (e.detail.target.id === 'log-entries' || e.detail.target.id === 'droplet-log-entries') {
+        document.getElementById('scroll-anchor').scrollIntoView({ behavior: 'smooth' });
       }
     });
   </script>

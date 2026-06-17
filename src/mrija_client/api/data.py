@@ -179,6 +179,25 @@ async def logs_fragment():
     return HTMLResponse("".join(rows))
 
 
+@router.get("/droplet-logs", response_class=HTMLResponse)
+async def droplet_logs_fragment():
+    import os, urllib.request
+    droplet_url = os.environ.get("MRIJA_DROPLET_URL", "").rstrip("/")
+    droplet_key = os.environ.get("MRIJA_DROPLET_KEY", "")
+    if not droplet_url or not droplet_key:
+        return HTMLResponse('<div class="log-line dim">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</div>')
+    try:
+        req = urllib.request.Request(
+            f"{droplet_url}/data/logs",
+            headers={"X-Api-Key": droplet_key},
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            body = r.read().decode()
+        return HTMLResponse(body)
+    except Exception as exc:
+        return HTMLResponse(f'<div class="log-line dim">Droplet unreachable: {html.escape(str(exc))}</div>')
+
+
 @router.get("/admin-panel", response_class=HTMLResponse)
 async def admin_panel_fragment():
     from mrija_client.server import get_state
