@@ -261,7 +261,7 @@ input[type=date].filter-input::-webkit-calendar-picker-indicator { filter: inver
 /* ── Admin panel ─────────────────────────────────────────────────────────── */
 #admin-col {
   flex-shrink: 0;
-  height: 200px;
+  height: 260px;
   border-top: 1px solid #334155;
   background: #0d1117;
   overflow: hidden;

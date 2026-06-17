@@ -58,4 +58,12 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
             mode=mode,
         )
 
+    @app.get("/admin", response_class=HTMLResponse)
+    async def admin_page():
+        tpl = Template((STATIC_DIR / "admin.html").read_text(encoding="utf-8"))
+        return tpl.render(
+            api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
+            db_path=str(state.db_path) if state.db_path else "no database",
+        )
+
     return app

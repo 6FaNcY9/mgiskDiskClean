@@ -169,11 +169,14 @@ async def logs_fragment():
     from mrija_client.server import get_state
     state = get_state()
     _rich = re.compile(r"\[/?[^\]]*\]")
-    lines = [_rich.sub("", ln) for ln in state.logs[-40:]]
-    rows = "".join(
-        f'<div class="log-line">{html.escape(ln)}</div>' for ln in reversed(lines)
-    )
-    return HTMLResponse(rows or '<div class="log-line dim">No log entries yet.</div>')
+    lines = [_rich.sub("", ln) for ln in state.logs[-80:]]
+    if not lines:
+        return HTMLResponse('<div class="log-line dim">No log entries yet.</div>')
+    rows = []
+    for i, ln in enumerate(lines):
+        cls = "log-line fresh" if i >= len(lines) - 3 else "log-line"
+        rows.append(f'<div class="{cls}">{html.escape(ln)}</div>')
+    return HTMLResponse("".join(rows))
 
 
 @router.get("/admin-panel", response_class=HTMLResponse)

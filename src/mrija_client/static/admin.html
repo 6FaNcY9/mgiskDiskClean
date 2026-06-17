@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MrijaArchive — Admin</title>
+  <script src="/static/htmx.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0f1a;
+      color: #e2e8f0;
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: .6rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+    }
+    h1 { font-size: .9rem; font-weight: 700; color: #818cf8; }
+    .db-path { color: #475569; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .controls { display: flex; gap: .5rem; }
+    .btn {
+      padding: .3rem .75rem;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #94a3b8;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: #6366f1; color: #a5b4fc; background: #1e1b4b; }
+    .btn.danger { border-color: #7f1d1d; color: #fca5a5; }
+    .btn.danger:hover { background: #450a0a; }
+
+    #status-row {
+      background: #111827;
+      border-bottom: 1px solid #1e293b;
+      padding: .4rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+
+    #log-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: .75rem 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+    #log-entries {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .log-line {
+      padding: .15rem 0;
+      color: #64748b;
+      border-bottom: 1px solid #0f172a;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .log-line:last-child { color: #94a3b8; }
+    .log-line.fresh { color: #a5b4fc; }
+
+    #scroll-anchor { height: 1px; }
+
+    .badge {
+      font-size: 10px; font-weight: 700; padding: .15rem .5rem;
+      border-radius: 8px; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .badge-running  { background: #064e3b; color: #6ee7b7; }
+    .badge-updating { background: #451a03; color: #fde68a; }
+    .badge-error    { background: #450a0a; color: #fca5a5; }
+    .badge-no_data  { background: #1e293b; color: #64748b; }
+
+    .hint { color: #334155; font-size: 11px; }
+  </style>
+</head>
+<body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
+
+  <header>
+    <h1>MrijaArchive Admin</h1>
+    <span class="db-path">{{ db_path }}</span>
+    <div class="controls">
+      <button class="btn"
+              hx-post="/api/restart"
+              hx-swap="none">Restart DB</button>
+      <button class="btn danger"
+              hx-post="/api/shutdown"
+              hx-swap="none"
+              onclick="return confirm('Shut down the server?')">Shutdown</button>
+    </div>
+  </header>
+
+  <div id="status-row"
+       hx-get="/data/status-bar"
+       hx-trigger="load, every 2s"
+       hx-swap="innerHTML">
+    <span class="hint">loading…</span>
+  </div>
+
+  <div id="log-wrap">
+    <div id="log-entries"
+         hx-get="/data/logs"
+         hx-trigger="load, every 2s"
+         hx-swap="innerHTML">
+      <div class="log-line hint">Waiting for log entries…</div>
+    </div>
+    <div id="scroll-anchor"></div>
+  </div>
+
+  <script>
+    // Auto-scroll to bottom after each log refresh
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+      if (e.detail.target.id === 'log-entries') {
+        const anchor = document.getElementById('scroll-anchor');
+        if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  </script>
+
+</body>
+</html>
