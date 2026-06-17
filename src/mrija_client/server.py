@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import time
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -28,13 +29,16 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
 
     @app.middleware("http")
     async def _log_requests(request: Request, call_next):
+        t0 = time.monotonic()
         response = await call_next(request)
+        ms = int((time.monotonic() - t0) * 1000)
         path = request.url.path
         if not path.startswith("/static") and path != "/api/update/progress":
-            state.log(
-                f"[dim]{request.method}[/dim] {path}"
-                f" [dim]→ {response.status_code}[/dim]"
-            )
+            ip = (request.headers.get("x-forwarded-for") or
+                  getattr(request.client, "host", "?"))
+            ua = request.headers.get("user-agent", "")
+            state.log(f"{request.method} {path} → {response.status_code} ({ms}ms) [{ip}]")
+            state.log_request(ip, request.method, path, response.status_code, ms, ua)
         return response
 
     # Routers imported lazily — they don't exist until Tasks 6 and 7

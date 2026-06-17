@@ -10,148 +10,240 @@
     body {
       background: #0a0f1a;
       color: #e2e8f0;
-      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
-      font-size: 13px;
+      font-family: ui-monospace, 'Cascadia Code', monospace;
+      font-size: 12px;
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
 
+    /* ── Header ── */
     header {
       background: #1e293b;
-      border-bottom: 1px solid #334155;
-      padding: .6rem 1rem;
+      border-bottom: 2px solid #6366f1;
+      padding: .5rem 1rem;
       display: flex;
       align-items: center;
       gap: 1rem;
       flex-shrink: 0;
     }
-    h1 { font-size: .9rem; font-weight: 700; color: #818cf8; }
+    h1 { font-size: .9rem; font-weight: 700; color: #818cf8; white-space: nowrap; }
     .db-path { color: #475569; font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    .controls { display: flex; gap: .5rem; }
     .btn {
-      padding: .3rem .75rem;
-      border-radius: 5px;
-      font-size: 12px;
-      cursor: pointer;
-      border: 1px solid #334155;
-      background: #1e293b;
-      color: #94a3b8;
-      font-family: inherit;
+      padding: .25rem .7rem; border-radius: 5px; font-size: 11px;
+      cursor: pointer; border: 1px solid #334155;
+      background: #1e293b; color: #94a3b8; font-family: inherit;
+      white-space: nowrap;
     }
-    .btn:hover { border-color: #6366f1; color: #a5b4fc; background: #1e1b4b; }
+    .btn:hover { border-color: #6366f1; color: #a5b4fc; }
     .btn.danger { border-color: #7f1d1d; color: #fca5a5; }
     .btn.danger:hover { background: #450a0a; }
 
-    #status-row {
+    /* ── Status strip ── */
+    #status-strip {
       background: #111827;
       border-bottom: 1px solid #1e293b;
-      padding: .4rem 1rem;
+      padding: .3rem 1rem;
       display: flex;
       align-items: center;
       gap: 1rem;
       flex-shrink: 0;
-      font-size: 12px;
+      min-height: 30px;
     }
 
-    #log-wrap {
+    /* ── Log panels ── */
+    #panels {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+    }
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #1e293b;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .panel:last-child { border-right: none; }
+    .panel-header {
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+      padding: .35rem .75rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-shrink: 0;
+    }
+    .panel-title { font-size: 10px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: .08em; }
+    .panel-sub { font-size: 10px; color: #475569; flex: 1; }
+    select.filter {
+      background: #1e293b; border: 1px solid #334155; color: #94a3b8;
+      font-size: 11px; padding: .15rem .4rem; border-radius: 4px;
+      font-family: inherit;
+    }
+
+    /* ── Request table ── */
+    .tbl-wrap { flex: 1; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #0f172a;
+      color: #475569;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: .25rem .5rem;
+      text-align: left;
+      position: sticky; top: 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .req-row td { padding: .2rem .5rem; border-bottom: 1px solid #0f172a; vertical-align: middle; }
+    .req-row:hover { background: #111827; }
+
+    .col-ts     { color: #334155; white-space: nowrap; width: 6.5rem; }
+    .col-ip     { color: #475569; white-space: nowrap; width: 9rem; }
+    .col-method { color: #64748b; white-space: nowrap; width: 4rem; }
+    .col-path   { color: #94a3b8; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-status { white-space: nowrap; width: 3.5rem; font-weight: 700; }
+    .col-ms     { color: #475569; white-space: nowrap; width: 4.5rem; }
+    .col-client { white-space: nowrap; width: 6rem; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+
+    .s2 { color: #6ee7b7; }
+    .s3 { color: #fde68a; }
+    .s4 { color: #fca5a5; }
+
+    .windows-app { color: #818cf8; }
+    .browser     { color: #67e8f9; }
+    .updater     { color: #fde68a; }
+    .other       { color: #64748b; }
+
+    .log-empty { color: #334155; padding: 1rem; text-align: center; }
+
+    /* ── App log panel ── */
+    .app-logs {
       flex: 1;
       overflow-y: auto;
-      padding: .75rem 1rem;
+      padding: .4rem .75rem;
       display: flex;
       flex-direction: column;
     }
-    #log-entries {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-    .log-line {
-      padding: .15rem 0;
-      color: #64748b;
-      border-bottom: 1px solid #0f172a;
-      white-space: pre-wrap;
-      word-break: break-all;
-      line-height: 1.5;
-    }
-    .log-line:last-child { color: #94a3b8; }
+    .log-line { color: #475569; padding: .1rem 0; border-bottom: 1px solid #0a0f1a; white-space: pre-wrap; word-break: break-all; }
     .log-line.fresh { color: #a5b4fc; }
-
-    #scroll-anchor { height: 1px; }
-
-    .badge {
-      font-size: 10px; font-weight: 700; padding: .15rem .5rem;
-      border-radius: 8px; text-transform: uppercase; letter-spacing: .05em;
-    }
-    .badge-running  { background: #064e3b; color: #6ee7b7; }
-    .badge-updating { background: #451a03; color: #fde68a; }
-    .badge-error    { background: #450a0a; color: #fca5a5; }
-    .badge-no_data  { background: #1e293b; color: #64748b; }
-
-    .hint { color: #334155; font-size: 11px; }
-    .log-section-label {
-      font-size: 10px; font-weight: 700; color: #6366f1;
-      text-transform: uppercase; letter-spacing: .08em;
-      padding: .5rem 0 .2rem;
-      border-top: 1px solid #1e293b;
-      margin-top: .25rem;
-    }
-    .log-section-label:first-child { border-top: none; margin-top: 0; }
+    .log-empty-msg { color: #1e293b; padding: 1rem; }
+    #scroll-local, #scroll-droplet { height: 1px; }
   </style>
 </head>
 <body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
 
   <header>
-    <h1>MrijaArchive Admin</h1>
-    <span class="db-path">{{ db_path }}</span>
-    <div class="controls">
-      <button class="btn"
-              hx-post="/api/restart"
-              hx-swap="none">Restart DB</button>
-      <button class="btn danger"
-              hx-post="/api/shutdown"
-              hx-swap="none"
-              onclick="return confirm('Shut down the server?')">Shutdown</button>
-    </div>
+    <h1>&#x1F4E6; MrijaArchive Admin</h1>
+    <span class="db-path">&#x1F5C4; {{ db_path }}</span>
+    <button class="btn" hx-post="/api/restart" hx-swap="none">&#x21BA; Restart DB</button>
+    <button class="btn danger" hx-post="/api/shutdown" hx-swap="none"
+            onclick="return confirm('Shut down the server?')">&#x23F9; Shutdown</button>
   </header>
 
-  <div id="status-row"
+  <div id="status-strip"
        hx-get="/data/status-bar"
        hx-trigger="load, every 2s"
        hx-swap="innerHTML">
-    <span class="hint">loading…</span>
+    <span style="color:#334155">loading…</span>
   </div>
 
-  <div id="log-wrap">
-    <div class="log-section-label">Local</div>
-    <div id="log-entries"
-         hx-get="/data/logs"
-         hx-trigger="load, every 2s"
-         hx-swap="innerHTML">
-      <div class="log-line hint">Waiting for log entries…</div>
+  <div id="panels">
+
+    <!-- Local requests -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Local</span>
+        <span class="panel-sub">127.0.0.1</span>
+        <select class="filter" id="local-client-filter"
+                hx-get="/data/logs/clients"
+                hx-trigger="load"
+                hx-target="this"
+                hx-swap="innerHTML"
+                hx-on:change="htmx.ajax('GET','/data/logs?client='+this.value,{target:'#local-tbody',swap:'innerHTML'})">
+          <option value="">All clients</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th><th>IP</th><th>Method</th><th>Path</th>
+              <th>Status</th><th>ms</th><th>Client</th>
+            </tr>
+          </thead>
+          <tbody id="local-tbody"
+                 hx-get="/data/logs"
+                 hx-trigger="load, every 2s"
+                 hx-swap="innerHTML">
+            <tr><td colspan="7" class="log-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div id="scroll-local"></div>
+      </div>
     </div>
 
     {% if has_droplet %}
-    <div class="log-section-label">Droplet &mdash; {{ droplet_url }}</div>
-    <div id="droplet-log-entries"
-         hx-get="/data/droplet-logs"
-         hx-trigger="load, every 5s"
-         hx-swap="innerHTML">
-      <div class="log-line hint">Fetching droplet logs…</div>
+    <!-- Droplet requests -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Droplet</span>
+        <span class="panel-sub">{{ droplet_url }}</span>
+        <select class="filter" id="droplet-client-filter"
+                hx-on:change="htmx.ajax('GET','/data/droplet-logs?client='+this.value,{target:'#droplet-tbody',swap:'innerHTML'})">
+          <option value="">All clients</option>
+          <option value="windows-app">windows-app</option>
+          <option value="browser">browser</option>
+          <option value="updater">updater</option>
+          <option value="other">other</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th><th>IP</th><th>Method</th><th>Path</th>
+              <th>Status</th><th>ms</th><th>Client</th>
+            </tr>
+          </thead>
+          <tbody id="droplet-tbody"
+                 hx-get="/data/droplet-logs"
+                 hx-trigger="load, every 5s"
+                 hx-swap="innerHTML">
+            <tr><td colspan="7" class="log-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div id="scroll-droplet"></div>
+      </div>
     </div>
     {% endif %}
 
-    <div id="scroll-anchor"></div>
+    <!-- App messages (non-HTTP) -->
+    <div class="panel" style="max-width:320px; flex-shrink:0;">
+      <div class="panel-header">
+        <span class="panel-title">App log</span>
+      </div>
+      <div class="app-logs" id="app-log-entries"
+           hx-get="/data/applogs"
+           hx-trigger="load, every 2s"
+           hx-swap="innerHTML">
+        <div class="log-empty-msg">Waiting…</div>
+      </div>
+    </div>
+
   </div>
 
   <script>
+    // Auto-scroll log tables on update
     document.body.addEventListener('htmx:afterSwap', function(e) {
-      if (e.detail.target.id === 'log-entries' || e.detail.target.id === 'droplet-log-entries') {
-        document.getElementById('scroll-anchor').scrollIntoView({ behavior: 'smooth' });
-      }
+      const id = e.detail.target.id;
+      if (id === 'local-tbody') document.getElementById('scroll-local').scrollIntoView();
+      if (id === 'droplet-tbody') document.getElementById('scroll-droplet').scrollIntoView();
     });
   </script>
 

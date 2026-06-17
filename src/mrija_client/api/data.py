@@ -165,13 +165,44 @@ async def update_check():
 
 
 @router.get("/logs", response_class=HTMLResponse)
-async def logs_fragment():
+async def logs_fragment(client: str = "", limit: int = 100):
+    from mrija_client.server import get_state
+    state = get_state()
+
+    entries = list(state.requests[-500:])
+    if client:
+        entries = [e for e in entries if e["client"] == client]
+    entries = entries[-limit:]
+
+    if not entries:
+        return HTMLResponse('<tr><td colspan="6" class="log-empty">No requests yet.</td></tr>')
+
+    rows = []
+    for e in reversed(entries):
+        s = e["status"]
+        scls = "s2" if s < 300 else ("s4" if s >= 400 else "s3")
+        rows.append(
+            f'<tr class="req-row">'
+            f'<td class="col-ts">{html.escape(e["ts"])}</td>'
+            f'<td class="col-ip">{html.escape(e["ip"])}</td>'
+            f'<td class="col-method">{html.escape(e["method"])}</td>'
+            f'<td class="col-path" title="{html.escape(e["path"])}">{html.escape(e["path"])}</td>'
+            f'<td class="col-status {scls}">{s}</td>'
+            f'<td class="col-ms">{e["ms"]}ms</td>'
+            f'<td class="col-client {e["client"]}">{html.escape(e["client"])}</td>'
+            f'</tr>'
+        )
+    return HTMLResponse("".join(rows))
+
+
+@router.get("/applogs", response_class=HTMLResponse)
+async def applogs_fragment():
     from mrija_client.server import get_state
     state = get_state()
     _rich = re.compile(r"\[/?[^\]]*\]")
-    lines = [_rich.sub("", ln) for ln in state.logs[-80:]]
+    lines = [_rich.sub("", ln) for ln in state.logs[-60:]]
     if not lines:
-        return HTMLResponse('<div class="log-line dim">No log entries yet.</div>')
+        return HTMLResponse('<div class="log-empty-msg">No entries yet.</div>')
     rows = []
     for i, ln in enumerate(lines):
         cls = "log-line fresh" if i >= len(lines) - 3 else "log-line"
@@ -179,23 +210,34 @@ async def logs_fragment():
     return HTMLResponse("".join(rows))
 
 
+@router.get("/logs/clients", response_class=HTMLResponse)
+async def logs_clients():
+    from mrija_client.server import get_state
+    state = get_state()
+    seen = sorted({e["client"] for e in state.requests})
+    opts = '<option value="">All clients</option>'
+    for c in seen:
+        opts += f'<option value="{html.escape(c)}">{html.escape(c)}</option>'
+    return HTMLResponse(opts)
+
+
 @router.get("/droplet-logs", response_class=HTMLResponse)
-async def droplet_logs_fragment():
+async def droplet_logs_fragment(client: str = ""):
     import os, urllib.request
     droplet_url = os.environ.get("MRIJA_DROPLET_URL", "").rstrip("/")
     droplet_key = os.environ.get("MRIJA_DROPLET_KEY", "")
     if not droplet_url or not droplet_key:
-        return HTMLResponse('<div class="log-line dim">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</div>')
+        return HTMLResponse('<tr><td colspan="6" class="log-empty">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</td></tr>')
     try:
-        req = urllib.request.Request(
-            f"{droplet_url}/data/logs",
-            headers={"X-Api-Key": droplet_key},
-        )
+        url = f"{droplet_url}/data/logs"
+        if client:
+            url += f"?client={client}"
+        req = urllib.request.Request(url, headers={"X-Api-Key": droplet_key})
         with urllib.request.urlopen(req, timeout=5) as r:
             body = r.read().decode()
         return HTMLResponse(body)
     except Exception as exc:
-        return HTMLResponse(f'<div class="log-line dim">Droplet unreachable: {html.escape(str(exc))}</div>')
+        return HTMLResponse(f'<tr><td colspan="6" class="log-empty">Droplet unreachable: {html.escape(str(exc))}</td></tr>')
 
 
 @router.get("/admin-panel", response_class=HTMLResponse)

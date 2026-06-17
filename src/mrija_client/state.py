@@ -32,11 +32,37 @@ class AppState:
     mode: str = "user"
     log_queue: queue.SimpleQueue = field(default_factory=queue.SimpleQueue)
     logs: list = field(default_factory=list)
+    requests: list = field(default_factory=list)  # structured request log
 
     def log(self, msg: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         entry = f"{ts}  {msg}"
         self.log_queue.put(entry)
         self.logs.append(entry)
-        if len(self.logs) > 100:
+        if len(self.logs) > 200:
             self.logs.pop(0)
+
+    def log_request(self, ip: str, method: str, path: str,
+                    status: int, ms: int, ua: str) -> None:
+        self.requests.append({
+            "ts": datetime.now().strftime("%H:%M:%S"),
+            "ip": ip,
+            "method": method,
+            "path": path,
+            "status": status,
+            "ms": ms,
+            "client": _detect_client(ua),
+        })
+        if len(self.requests) > 500:
+            self.requests.pop(0)
+
+
+def _detect_client(ua: str) -> str:
+    ua = ua.lower()
+    if "pywebview" in ua:
+        return "windows-app"
+    if "python-urllib" in ua or "python/" in ua:
+        return "updater"
+    if "mozilla" in ua or "chrome" in ua or "safari" in ua:
+        return "browser"
+    return "other"
