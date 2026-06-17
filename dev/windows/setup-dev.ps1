@@ -24,7 +24,6 @@ Install-WinGetPackage -Id "Microsoft.PowerShell" -Name "PowerShell 7"
 Install-WinGetPackage -Id "Git.Git" -Name "Git for Windows"
 Install-WinGetPackage -Id "Microsoft.VisualStudioCode" -Name "Visual Studio Code"
 Install-WinGetPackage -Id "Python.Python.3.13" -Name "Python 3.13"
-Install-WinGetPackage -Id "PHP.PHP.8.4" -Name "PHP 8.4"
 Install-WinGetPackage -Id "7zip.7zip" -Name "7-Zip"
 
 if (!$SkipOptional) {

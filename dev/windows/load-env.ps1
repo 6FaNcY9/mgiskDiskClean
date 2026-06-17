@@ -10,7 +10,7 @@ $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $DataDir = Join-Path $RepoRoot "data"
 $ClientDb = Join-Path $DataDir "client\mail_archive.sqlite"
 
-$env:MRIJA_WEB_PORT = [string]$Port
+$env:MRIJA_PORT = [string]$Port
 $env:MRIJA_DATA_DIR = $DataDir
 $env:MRIJA_SQLITE_PATH = $ClientDb
 
@@ -35,6 +35,6 @@ if (Test-Path (Join-Path $RepoRoot ".env")) {
 }
 
 Write-Host "Loaded Mrija Windows dev env:" -ForegroundColor Green
-Write-Host "  MRIJA_WEB_PORT=$env:MRIJA_WEB_PORT"
+Write-Host "  MRIJA_PORT=$env:MRIJA_PORT"
 Write-Host "  MRIJA_DATA_DIR=$env:MRIJA_DATA_DIR"
 Write-Host "  MRIJA_SQLITE_PATH=$env:MRIJA_SQLITE_PATH"
