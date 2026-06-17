@@ -7,7 +7,7 @@ The goal is a repeatable Windows setup that does not require Docker Desktop,
 WSL2, Hyper-V, or BIOS virtualization. The client runtime is:
 
 - Python launcher during development
-- PHP local web server bound to `127.0.0.1`
+- FastAPI local web server bound to `127.0.0.1`
 - SQLite database at `data/client/mail_archive.sqlite`
 
 ## First-Time Setup
@@ -46,10 +46,10 @@ http://127.0.0.1:8080
 ## Files
 
 - `setup-dev.ps1`: installs Windows developer tools with WinGet.
-- `load-env.ps1`: loads the local SQLite/PHP environment into the current shell.
-- `build-client-db.ps1`: converts `data/index/mail_index.sqlite` to the client DB.
-- `run-client.ps1`: starts the local PHP web server.
-- `test.ps1`: runs the Python/PHP test suite.
+- `load-env.ps1`: loads the local SQLite/Python environment into the current shell.
+- `build-client-db.ps1`: validates and copies `data/index/mail_index.sqlite` to the client DB.
+- `run-client.ps1`: starts the local Python web server.
+- `test.ps1`: runs the Python test suite.
 
 ## Notes
 

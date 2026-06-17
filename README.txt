@@ -2,86 +2,73 @@ Mrija Archive
 =============
 
 Search the mrija.org email archive from your Windows PC.
-No installation required. No internet needed after first setup.
+No Docker, WSL, or server login is required for normal use.
 
 
 HOW TO START
 ------------
 Double-click MrijaArchive.exe.
 
-The app opens a browser-style window on your screen.
-First launch takes a few seconds while the local server starts.
+The app opens a desktop window with the local archive viewer.
+First launch can take a few seconds while the local server starts.
 
 
-FIRST TIME -- LOADING YOUR DATA
---------------------------------
-If you see "No archive data" when the app opens:
+ARCHIVE DATA
+------------
+The app reads a local SQLite archive database.
 
-  Option A -- Open a file you already have:
-    Click "Open local file" and choose the .sqlite file
-    you received (e.g. mail_archive.sqlite or mail_index.sqlite).
-
-  Option B -- Download the latest data from the server:
-    Click "Download from server".
-    A progress bar shows the download. This needs an internet connection.
+If archive data is bundled with the package, it loads automatically.
+If the app starts without data, contact your administrator for a current
+SQLite archive file or an updated package.
 
 
 HOW TO SEARCH
 -------------
-Type any keyword in the search box and press Enter.
+Type in the search box to search email subject, sender, recipients, and body.
 
-  - Filter by mailbox using the dropdown on the left.
-  - Filter by date using the date fields.
-  - Click the paperclip icon to show only emails with attachments.
-  - Click any email row to read the full message.
-  - Press J/K or arrow keys to move between results.
-  - Press / to jump to the search box.
+Use the left sidebar to filter results:
 
-To export results as a spreadsheet: click "Export CSV".
+  - Mailbox: show all mailboxes or one selected mailbox.
+  - Date from / Date to: limit results by message date.
+  - Attachments: show any emails, emails with attachments, or emails without
+    attachments.
 
-
-HOW TO UPDATE YOUR DATA
------------------------
-When new archive data is available:
-
-  Option A -- Download automatically (needs internet):
-    Click "Stop" in the top-right, then click "Check for update".
-    The app downloads, verifies, and loads the new data.
-
-  Option B -- Open a new file:
-    Click "Stop", then "Open different file" and choose
-    the new .sqlite file you received.
-
-
-HOW TO STOP
------------
-Click "Stop" in the app, then close the window.
-Or just close the window -- the local server stops automatically.
+Click Browse to list messages without entering a search term.
+Click any email row to read the full message in the detail pane.
 
 
 ATTACHMENTS
 -----------
-Attachments are shown below each email. Click to download.
-Files flagged as potentially harmful are blocked by default.
+Attachments are shown below the selected email when they exist.
+Click an attachment name to download it from the local archive data.
+
+
+UPDATES
+-------
+If an update server is configured, use the Update button in the top bar.
+The app downloads the new archive, verifies its checksum, and loads it locally.
+
+
+HOW TO STOP
+-----------
+Close the MrijaArchive window. The local server stops with the app.
 
 
 SYSTEM REQUIREMENTS
 -------------------
 Windows 10 or 11 (64-bit)
-~200 MB disk space for the app
-Additional space for your archive data (varies)
+Enough disk space for the app and archive data
 
 
 TROUBLESHOOTING
 ---------------
-App shows "Startup timed out":
+App shows a startup error:
   Close and reopen MrijaArchive.exe.
 
-App shows "No archive data" after you already loaded data:
-  The data folder may have moved. Click "Open local file"
-  and choose your .sqlite file again.
+Search shows no results:
+  Clear filters in the left sidebar and try Browse.
 
-App window is blank or shows an error page:
-  Close and reopen MrijaArchive.exe.
+Attachments do not open:
+  Ask your administrator to confirm the package includes the attachment data.
 
 If problems persist, contact your administrator.

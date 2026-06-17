@@ -31,9 +31,8 @@ Default output:
 
 The app and dev scripts need to write generated files:
 
-- `web/config/local.php`
 - `data/client/mail_archive.sqlite`
-- Python/PHP test caches
+- Python test caches
 
 A read-only VM share is good for secure transfer, but not for running the app
 directly.
