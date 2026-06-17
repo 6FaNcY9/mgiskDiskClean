@@ -60,7 +60,7 @@ manifest = {
     'url': '/updates/$GZ_NAME',
     'sha256': '$SHA256',
     'size': $SIZE,
-    'created_at': datetime.datetime.utcnow().isoformat() + 'Z',
+    'created_at': datetime.datetime.now(datetime.UTC).isoformat(),
 }
 
 manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
@@ -68,5 +68,23 @@ print('manifest.json updated')
 PYEOF
 "
 
+# ── extract for live service ──────────────────────────────────────────────────
+echo "extracting SQLite for live service..."
+SSH_AUTH_SOCK="" ssh -i "$SSH_KEY" "$DROPLET" "
+    mkdir -p /opt/mrija/data
+    zcat ${UPDATES_DIR}/${GZ_NAME} > /opt/mrija/data/current.sqlite
+    echo 'extracted → /opt/mrija/data/current.sqlite'
+"
+
+# ── reload running service via API ────────────────────────────────────────────
+KEY=$(SSH_AUTH_SOCK="" ssh -i "$SSH_KEY" "$DROPLET" \
+    "grep MRIJA_API_KEY /opt/mrija/mrija.env | cut -d= -f2" 2>/dev/null)
+
+echo "reloading service..."
+curl -sf -X POST http://104.248.242.243:8080/api/open \
+    -H "X-Api-Key: $KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/opt/mrija/data/current.sqlite"}' | python3 -m json.tool
+
 echo ""
-echo "done — clients will pick up $GZ_NAME on next update check"
+echo "done — droplet serving $GZ_NAME, live API reloaded"
