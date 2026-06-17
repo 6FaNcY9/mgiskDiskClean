@@ -64,11 +64,12 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
         state.log(f"Manifest: version [cyan]{version}[/cyan]")
 
         url = UPDATE_SERVER + manifest["url"]
-        gz_dest = dest_dir / (manifest.get("filename") or Path(manifest["url"]).name)
+        filename = manifest.get("filename") or Path(manifest["url"]).name
+        gz_dest = dest_dir / filename
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         state.update_status = "Downloading archive…"
-        state.log(f"Downloading [cyan]{manifest['filename']}[/cyan]…")
+        state.log(f"Downloading [cyan]{filename}[/cyan]…")
 
         def _progress(done: int, total: int) -> None:
             state.update_progress = int(done / total * 90)
