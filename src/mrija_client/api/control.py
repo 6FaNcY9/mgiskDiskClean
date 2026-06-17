@@ -13,7 +13,7 @@ from mrija_client.state import ClientState
 router = APIRouter()
 
 
-def _check_key(x_api_key: str = Header(default="")) -> None:
+async def _check_key(x_api_key: str = Header(default="")) -> None:
     expected = os.environ.get("MRIJA_API_KEY", "dev-key")
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
