@@ -18,9 +18,10 @@ def get_state() -> AppState:
     return _app_state
 
 
-def create_app(state: AppState) -> FastAPI:
+def create_app(state: AppState, mode: str = "user") -> FastAPI:
     global _app_state
     _app_state = state
+    state.mode = mode
 
     app = FastAPI(title="MrijaArchive", docs_url="/api/docs", openapi_url="/openapi.json")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -52,6 +53,9 @@ def create_app(state: AppState) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def index():
         tpl = Template((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
-        return tpl.render(api_key=os.environ.get("MRIJA_API_KEY", "dev-key"))
+        return tpl.render(
+            api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
+            mode=mode,
+        )
 
     return app

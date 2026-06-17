@@ -26,6 +26,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--no-tui", action="store_true", help="Skip Rich TUI")
+    parser.add_argument("--mode", choices=["user", "admin"], default="user",
+                        help="UI mode: admin shows logs and controls")
     args = parser.parse_args()
 
     from mrija_client.state import AppState, ClientState
@@ -52,7 +54,7 @@ def main() -> None:
         except Exception:
             pass
 
-    app = create_app(state)
+    app = create_app(state, mode=args.mode)
     server_url = f"http://{args.bind}:{args.port}"
 
     if not os.environ.get("MRIJA_API_KEY"):

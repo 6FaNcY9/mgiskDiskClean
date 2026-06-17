@@ -3,16 +3,8 @@
         hx-get="/data/search"
         hx-target="#results"
         hx-push-url="true"
-        hx-trigger="change from:#filter-form, submit from:#filter-form">
-
-    <label class="filter-label">Mailbox</label>
-    <select name="mailbox" class="filter-select"
-            hx-get="/data/mailboxes"
-            hx-trigger="load"
-            hx-target="this"
-            hx-swap="innerHTML">
-      <option value="">Loading…</option>
-    </select>
+        hx-trigger="change from:#filter-form, submit from:#filter-form"
+        hx-include="#filter-form, #mailbox-select">
 
     <label class="filter-label">Date from</label>
     <input type="date" name="date_from" class="filter-input"
@@ -32,6 +24,7 @@
     <button type="reset" class="filter-reset"
             hx-get="/data/search"
             hx-target="#results"
-            hx-push-url="true">Clear</button>
+            hx-push-url="true"
+            hx-include="#filter-form, #mailbox-select">Clear</button>
   </form>
 </aside>

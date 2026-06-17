@@ -1,0 +1,13 @@
+<div id="update-banner" class="update-banner"
+     hx-get="/data/update-check"
+     hx-trigger="every 300s"
+     hx-swap="outerHTML">
+  <span class="banner-msg">&#x1F4E6; New archive available{% if version %} (v{{ version }}){% endif %}{% if size_mb %} &mdash; {{ size_mb }} MB{% endif %}</span>
+  <button class="upd-btn"
+          hx-post="/api/update"
+          hx-swap="none"
+          hx-disabled-elt="this">
+    &#x2193; Download now
+  </button>
+  <button class="banner-dismiss" onclick="document.getElementById('update-banner').remove()">&#x2715;</button>
+</div>

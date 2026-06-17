@@ -11,28 +11,48 @@
 
   <header>
     <h1>MrijaArchive</h1>
+
+    <div class="mailbox-picker">
+      <label class="picker-label">Mailbox</label>
+      <select id="mailbox-select" name="mailbox"
+              hx-get="/data/mailboxes"
+              hx-trigger="load"
+              hx-target="this"
+              hx-swap="innerHTML"
+              hx-on:change="htmx.ajax('GET','/data/browse',{target:'#results',include:'#filter-form, #mailbox-select'})">
+        <option value="">All</option>
+      </select>
+    </div>
+
     <div class="search-bar">
       <input type="search" id="q" name="q" placeholder="Search emails…"
         hx-get="/data/search"
         hx-trigger="keyup changed delay:300ms, search"
         hx-target="#results"
-        hx-include="#filter-form"
+        hx-include="#filter-form, #mailbox-select"
         hx-push-url="true"
         hx-indicator="#spinner"
         autofocus>
       <span id="spinner" class="htmx-indicator">…</span>
     </div>
+
     <nav>
       <a hx-get="/data/browse"
          hx-target="#results"
          hx-push-url="true"
-         hx-include="#filter-form">Browse</a>
+         hx-include="#filter-form, #mailbox-select">Browse</a>
     </nav>
+
     <div id="status-bar"
          hx-get="/data/status-bar"
          hx-trigger="load, every 3s"
          hx-swap="outerHTML"></div>
   </header>
+
+  <div id="update-banner"
+       hx-get="/data/update-check"
+       hx-trigger="load, every 300s"
+       hx-swap="outerHTML"></div>
 
   <div id="layout">
     <div id="filters-col"
@@ -40,10 +60,17 @@
          hx-trigger="load"
          hx-swap="innerHTML"></div>
     <main id="results">
-      <p class="hint">Type to search or click Browse.</p>
+      <p class="hint">Select a mailbox or type to search.</p>
     </main>
     <aside id="detail"></aside>
   </div>
+
+  {% if mode == "admin" %}
+  <div id="admin-col"
+       hx-get="/data/admin-panel"
+       hx-trigger="load"
+       hx-swap="innerHTML"></div>
+  {% endif %}
 
 </body>
 </html>

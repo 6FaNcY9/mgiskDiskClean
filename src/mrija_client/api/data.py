@@ -1,5 +1,6 @@
 from __future__ import annotations
 import html
+import re
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -139,6 +140,48 @@ async def status_bar():
         refresh_interval="1s" if is_updating else "3s",
         is_updating=is_updating,
     )
+
+
+@router.get("/update-check", response_class=HTMLResponse)
+async def update_check():
+    from mrija_client.server import get_state
+    from mrija_client.updater import fetch_manifest
+    state = get_state()
+    try:
+        manifest = fetch_manifest()
+        remote_ver = manifest.get("version", "")
+        if remote_ver and remote_ver == state.manifest_version:
+            return HTMLResponse(
+                '<div id="update-banner" hx-get="/data/update-check"'
+                ' hx-trigger="every 300s" hx-swap="outerHTML"></div>'
+            )
+        size_mb = round(manifest.get("size", 0) / 1024 / 1024, 1)
+        return _render("update_banner.html", version=remote_ver, size_mb=size_mb)
+    except Exception:
+        return HTMLResponse(
+            '<div id="update-banner" hx-get="/data/update-check"'
+            ' hx-trigger="every 300s" hx-swap="outerHTML"></div>'
+        )
+
+
+@router.get("/logs", response_class=HTMLResponse)
+async def logs_fragment():
+    from mrija_client.server import get_state
+    state = get_state()
+    _rich = re.compile(r"\[/?[^\]]*\]")
+    lines = [_rich.sub("", ln) for ln in state.logs[-40:]]
+    rows = "".join(
+        f'<div class="log-line">{html.escape(ln)}</div>' for ln in reversed(lines)
+    )
+    return HTMLResponse(rows or '<div class="log-line dim">No log entries yet.</div>')
+
+
+@router.get("/admin-panel", response_class=HTMLResponse)
+async def admin_panel_fragment():
+    from mrija_client.server import get_state
+    state = get_state()
+    db_info = str(state.db_path) if state.db_path else "no database"
+    return _render("admin_panel.html", db_info=db_info)
 
 
 @router.get("/attachment/{sha256}")

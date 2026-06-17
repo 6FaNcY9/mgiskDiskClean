@@ -28,8 +28,15 @@ class AppState:
     update_status: str = ""
     error_message: str = ""
     version: str = ""
+    manifest_version: str = ""
+    mode: str = "user"
     log_queue: queue.SimpleQueue = field(default_factory=queue.SimpleQueue)
+    logs: list = field(default_factory=list)
 
     def log(self, msg: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
-        self.log_queue.put(f"[dim]{ts}[/dim]  {msg}")
+        entry = f"{ts}  {msg}"
+        self.log_queue.put(entry)
+        self.logs.append(entry)
+        if len(self.logs) > 100:
+            self.logs.pop(0)

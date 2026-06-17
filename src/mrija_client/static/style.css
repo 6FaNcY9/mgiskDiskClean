@@ -49,6 +49,7 @@ nav a:hover { color: #e2e8f0; }
 .htmx-request .htmx-indicator { display: inline; }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
+#update-banner:empty { display: none; }
 #layout {
   display: flex;
   flex: 1;
@@ -213,3 +214,95 @@ input[type=date].filter-input::-webkit-calendar-picker-indicator { filter: inver
 .upd-btn:hover    { background: #312e81; color: #e2e8f0; }
 .upd-btn.htmx-request { opacity: .5; cursor: default; }
 .error-msg { color: #f87171; font-size: 12px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Mailbox picker (header) ─────────────────────────────────────────────── */
+.mailbox-picker {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-shrink: 0;
+}
+.picker-label { font-size: 11px; color: #64748b; white-space: nowrap; }
+.mailbox-picker select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: .3rem .5rem;
+  border-radius: 6px;
+  font-size: 13px;
+  max-width: 180px;
+}
+.mailbox-picker select:focus { outline: 2px solid #6366f1; }
+
+/* ── Update banner ───────────────────────────────────────────────────────── */
+.update-banner {
+  background: #1e3a5f;
+  border-bottom: 1px solid #2563eb;
+  padding: .4rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.banner-msg { color: #93c5fd; flex: 1; }
+.banner-dismiss {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 .25rem;
+}
+.banner-dismiss:hover { color: #e2e8f0; }
+
+/* ── Admin panel ─────────────────────────────────────────────────────────── */
+#admin-col {
+  flex-shrink: 0;
+  height: 200px;
+  border-top: 1px solid #334155;
+  background: #0d1117;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#admin-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .4rem .75rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+.admin-title { font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: .07em; }
+.admin-db { font-size: 11px; color: #475569; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-controls { display: flex; gap: .5rem; }
+.admin-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 5px;
+  padding: .2rem .6rem;
+  font-size: 12px;
+  cursor: pointer;
+}
+.admin-btn:hover { border-color: #6366f1; color: #a5b4fc; }
+.admin-btn.danger { border-color: #7f1d1d; color: #fca5a5; }
+.admin-btn.danger:hover { background: #450a0a; }
+#admin-logs {
+  flex: 1;
+  overflow-y: auto;
+  padding: .4rem .75rem;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column-reverse;
+}
+.log-line { color: #64748b; padding: .05rem 0; white-space: pre-wrap; }
+.log-line.dim { color: #334155; }

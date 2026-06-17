@@ -1,0 +1,21 @@
+<div id="admin-panel">
+  <div class="admin-header">
+    <span class="admin-title">Admin</span>
+    <span class="admin-db">{{ db_info }}</span>
+    <div class="admin-controls">
+      <button class="admin-btn"
+              hx-post="/api/restart"
+              hx-swap="none">Restart DB</button>
+      <button class="admin-btn danger"
+              hx-post="/api/shutdown"
+              hx-swap="none"
+              onclick="return confirm('Shut down the server?')">Shutdown</button>
+    </div>
+  </div>
+  <div id="admin-logs"
+       hx-get="/data/logs"
+       hx-trigger="load, every 2s"
+       hx-swap="innerHTML">
+    <div class="log-line dim">Loading…</div>
+  </div>
+</div>

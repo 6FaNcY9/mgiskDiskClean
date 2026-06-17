@@ -64,7 +64,7 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
         state.log(f"Manifest: version [cyan]{version}[/cyan]")
 
         url = UPDATE_SERVER + manifest["url"]
-        gz_dest = dest_dir / manifest["filename"]
+        gz_dest = dest_dir / (manifest.get("filename") or Path(manifest["url"]).name)
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         state.update_status = "Downloading archive…"
@@ -95,6 +95,7 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
         state.db = MailDB(sqlite_path)
         state.db_path = sqlite_path
         state.version = manifest.get("version", "")
+        state.manifest_version = state.version
 
         state.update_progress = 100
         state.update_status = "Done"
