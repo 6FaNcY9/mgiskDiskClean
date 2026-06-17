@@ -53,35 +53,41 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
     from mrija_client.state import ClientState
     from mrija_client.db import MailDB
 
+    manifest_url = UPDATE_SERVER + MANIFEST_PATH
     state.state = ClientState.UPDATING
     state.update_progress = 0
-    state.update_status = "Fetching manifest…"
-    state.log("Update started — fetching manifest…")
+    state.update_status = f"Connecting to {UPDATE_SERVER}…"
+    state.log(f"Update started — connecting to {UPDATE_SERVER}")
 
     try:
         manifest = fetch_manifest()
         version = manifest.get("version", "?")
-        state.log(f"Manifest: version [cyan]{version}[/cyan]")
+        filename = manifest.get("filename") or Path(manifest["url"]).name
+        size_mb = round(manifest.get("size", 0) / 1024 / 1024, 1)
+        state.log(f"Manifest from {manifest_url}: v{version}, {filename} ({size_mb} MB)")
 
         url = UPDATE_SERVER + manifest["url"]
-        filename = manifest.get("filename") or Path(manifest["url"]).name
         gz_dest = dest_dir / filename
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        state.update_status = "Downloading archive…"
-        state.log(f"Downloading [cyan]{filename}[/cyan]…")
+        state.update_status = f"Downloading {filename} ({size_mb} MB) from {UPDATE_SERVER}…"
+        state.log(f"Downloading {url} → {gz_dest}")
 
         def _progress(done: int, total: int) -> None:
-            state.update_progress = int(done / total * 90)
+            pct = int(done / total * 90)
+            done_mb = round(done / 1024 / 1024, 1)
+            state.update_progress = pct
+            state.update_status = f"Downloading {filename} — {done_mb}/{size_mb} MB ({pct}%)"
 
         download_archive(url, gz_dest, _progress)
-        state.log(f"Download complete ({gz_dest.stat().st_size // 1024:,} KB)")
+        actual_mb = round(gz_dest.stat().st_size / 1024 / 1024, 1)
+        state.log(f"Download complete: {actual_mb} MB from {UPDATE_SERVER}")
 
-        state.update_status = "Verifying checksum…"
-        state.log("Verifying SHA256…")
+        state.update_status = "Verifying SHA256…"
+        state.log("Verifying SHA256 checksum…")
         if not verify_sha256(gz_dest, manifest["sha256"]):
             raise ValueError("SHA256 mismatch — download corrupted")
-        state.log("Checksum [green]OK[/green]")
+        state.log("Checksum OK")
 
         state.update_status = "Decompressing…"
         state.update_progress = 92
@@ -99,21 +105,24 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
         state.manifest_version = state.version
 
         state.update_progress = 100
-        state.update_status = "Done"
         state.state = ClientState.RUNNING
 
         try:
             s = state.db.stats()
-            state.log(
-                f"[green]Update complete[/green] — v{state.version}  |  "
-                f"{s['email_count']:,} emails, {s['attachment_count']:,} attachments"
+            summary = (
+                f"Updated v{state.version} from {UPDATE_SERVER} — "
+                f"{filename} ({actual_mb} MB) — "
+                f"{s['email_count']:,} emails"
             )
+            state.update_status = summary
+            state.log(f"Update complete: {summary}")
         except Exception:
-            state.log(f"[green]Update complete[/green] — v{state.version}")
+            state.update_status = f"Updated v{state.version} from {UPDATE_SERVER} — {filename}"
+            state.log(f"Update complete: v{state.version}")
 
     except Exception as exc:
         state.state = ClientState.ERROR
         state.error_message = str(exc)
         state.update_status = f"Error: {exc}"
-        state.log(f"[red]Update failed:[/red] {exc}")
+        state.log(f"Update failed: {exc}")
         raise

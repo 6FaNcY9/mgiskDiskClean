@@ -213,6 +213,8 @@ input[type=date].filter-input::-webkit-calendar-picker-indicator { filter: inver
 }
 .upd-btn:hover    { background: #312e81; color: #e2e8f0; }
 .upd-btn.htmx-request { opacity: .5; cursor: default; }
+.upd-detail { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-size: 11px; cursor: default; }
+.upd-last   { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; font-size: 11px; cursor: default; }
 .error-msg { color: #f87171; font-size: 12px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Mailbox picker (header) ─────────────────────────────────────────────── */

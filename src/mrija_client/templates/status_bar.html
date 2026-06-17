@@ -10,7 +10,7 @@
     <div class="upd-wrap">
       <div class="upd-bar" style="width: {{ progress }}%"></div>
     </div>
-    <span class="stat-count">{{ update_status }}{% if progress %} — {{ progress }}%{% endif %}</span>
+    <span class="stat-count upd-detail" title="{{ update_status }}">{{ update_status }}</span>
   {% else %}
     <button class="upd-btn"
             hx-post="/api/update"
@@ -18,6 +18,9 @@
             hx-disabled-elt="this">
       ↓ Update
     </button>
+    {% if update_status %}
+      <span class="upd-last" title="{{ update_status }}">{{ update_status }}</span>
+    {% endif %}
   {% endif %}
   {% if error %}
     <span class="error-msg" title="{{ error }}">{{ error }}</span>
