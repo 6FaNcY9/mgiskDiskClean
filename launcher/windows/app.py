@@ -6,6 +6,7 @@ import secrets
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -46,6 +47,40 @@ class _Api:
     def __init__(self, state) -> None:
         self._state = state
         self._win   = None
+
+    def save_attachment(self, sha256: str, filename: str) -> dict:
+        if not all(c in "0123456789abcdefABCDEF" for c in sha256):
+            return {"error": "Invalid attachment ID."}
+        url = f"{_URL}/data/attachment/{sha256}"
+        req = urllib.request.Request(
+            url,
+            headers={"X-Api-Key": os.environ.get("MRIJA_API_KEY", "")},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code in (404, 403):
+                return {"error": "Attachment not available in this archive."}
+            return {"error": f"Download failed (HTTP {exc.code})."}
+        except Exception as exc:
+            return {"error": f"Download failed: {exc}"}
+
+        downloads = Path(os.environ.get("USERPROFILE", os.environ.get("HOME", "."))) / "Downloads"
+        downloads.mkdir(exist_ok=True)
+        safe_name = Path(filename).name or "attachment"
+        dest = downloads / safe_name
+        stem, suffix = Path(safe_name).stem, Path(safe_name).suffix
+        i = 1
+        while dest.exists():
+            dest = downloads / f"{stem} ({i}){suffix}"
+            i += 1
+        dest.write_bytes(data)
+        try:
+            os.startfile(str(dest))
+        except Exception:
+            pass
+        return {"ok": True, "path": str(dest)}
 
     def open_file(self) -> None:
         import webview

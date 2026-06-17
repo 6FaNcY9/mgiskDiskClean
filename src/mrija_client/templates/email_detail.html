@@ -9,7 +9,12 @@
   <div class="attachments">
     <p class="meta">Attachments:</p>
     {% for att in attachments %}
-    <a class="att-item" href="/data/attachment/{{ att.sha256 }}" download="{{ att.original_filename }}">
+    <a class="att-item"
+       href="/data/attachment/{{ att.sha256 }}"
+       download="{{ att.original_filename }}"
+       data-sha256="{{ att.sha256 }}"
+       data-filename="{{ att.original_filename }}"
+       onclick="mrija_download(this,event)">
       {{ att.original_filename }} ({{ (att.size / 1024)|round(1) }} KB)
     </a>
     {% endfor %}

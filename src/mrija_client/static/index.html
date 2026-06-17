@@ -72,5 +72,15 @@
        hx-swap="innerHTML"></div>
   {% endif %}
 
+  <script>
+    function mrija_download(el, evt) {
+      if (window.pywebview && window.pywebview.api) {
+        evt.preventDefault();
+        window.pywebview.api.save_attachment(
+          el.dataset.sha256, el.dataset.filename
+        ).then(function(r) { if (r && r.error) alert(r.error); });
+      }
+    }
+  </script>
 </body>
 </html>
