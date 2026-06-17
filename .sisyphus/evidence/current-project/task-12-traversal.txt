@@ -1,0 +1,59 @@
+Task 12 — apply_decisions: path traversal rejection QA
+=======================================================
+Date: 2026-03-28 (compliance-fix refresh)
+Tool: python -m maildir_report.apply_decisions apply
+
+SCENARIO: Tampered plan with filepath outside maildir_root
+
+SETUP
+-----
+maildir_root: /tmp/qa12r_34u10eip/qa_maildir/
+evil file:    /tmp/qa12r_34u10eip/outside_dir/evil.eml  (outside maildir_root)
+
+A valid plan is created then tampered in two ways to prove traversal is blocked.
+
+TEST 1: Absolute path outside maildir_root
+------------------------------------------
+Tampered filepath: /tmp/qa12r_34u10eip/outside_dir/evil.eml
+
+Command:
+  python -m maildir_report.apply_decisions apply \
+    --plan .../tampered.json \
+    --confirm 58202373
+
+Stderr:
+  [ERROR] Path traversal detected: '.../outside_dir/evil.eml'
+          is not under '.../qa_maildir'
+
+Exit code: 1  (nonzero — PASS)
+evil file still exists: True  (not moved/deleted — PASS)
+TRAVERSAL BLOCKED: PASS
+
+TEST 2: Dotdot (../..) path that resolves outside maildir_root
+--------------------------------------------------------------
+Tampered filepath: /tmp/qa12r_34u10eip/qa_maildir/cur/../../evil.eml
+
+Command:
+  python -m maildir_report.apply_decisions apply \
+    --plan .../tampered_dotdot.json \
+    --confirm 58202373
+
+Stderr:
+  [ERROR] Path traversal detected:
+          '.../qa_maildir/cur/../../evil.eml'
+          is not under '.../qa_maildir'
+
+Exit code: 1  (nonzero — PASS)
+DOTDOT BLOCKED: PASS
+
+SUMMARY
+-------
+Test 1 (absolute outside path):  EXIT 1 — PASS
+Test 2 (dotdot path):             EXIT 1 — PASS
+No files moved outside maildir_root in either case: PASS
+
+IMPLEMENTATION NOTE
+-------------------
+Guard in _assert_under_root() uses os.path.realpath() which resolves all
+symlinks and dotdots before comparing with root_real prefix. All candidates
+are validated BEFORE any file is touched — first violation aborts immediately.

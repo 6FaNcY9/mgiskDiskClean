@@ -1,0 +1,53 @@
+==================================================================
+Task 9 Export CSV QA -- 2026-03-26T06:48:53Z
+==================================================================
+
+==> Setting up fixture data in MariaDB ...
+  Fixture inserted: report testreport9, 3 emails (1 keep, 2 delete).
+
+==> Starting PHP server on http://127.0.0.1:8109 ...
+  PHP server running (PID 985027).
+
+==> Logging in as admin ...
+  Logged in as admin.
+
+==> Logging in as coworker (for access-control test) ...
+  Logged in as coworker.
+
+--- Test 1: GET /admin/export/decisions?report_id=testreport9 ---
+  HTTP status: 200 (expected 200)
+  CSV content:
+---
+  stable_id,date,sender,subject,size_bytes,has_attachments,attachment_count,attachment_total_bytes,attachment_extensions,dup_group_id,dup_rank,total_size_bytes,decision,note
+  e9-stable-1,2026-01-01,alice@test.com,"Subject Alpha",1024,,,,,,-1,1024,keep,important
+  e9-stable-2,2026-01-02,bob@test.com,"Subject Beta",2048,,,,,grp1,0,2048,delete,duplicate
+  e9-stable-3,2026-01-03,carol@test.com,"Subject Gamma",512,,,,,grp1,1,512,delete,"dup copy"
+---
+  PASS: decisions export HTTP 200
+
+--- Test 2: Parse decisions.reviewed.csv in Python ---
+  Python result: PYTHON_PASS: header OK, 3 rows, keep=1 delete=2, ordering OK
+  PASS: Python CSV parse: header + row count + decisions + ordering correct
+
+--- Test 3: GET /admin/export/audit?report_id=testreport9 ---
+  HTTP status: 200 (expected 200)
+  Audit CSV header:
+  stable_id,date,sender,subject,size_bytes,has_attachments,attachment_count,attachment_total_bytes,attachment_extensions,dup_group_id,dup_rank,total_size_bytes,decision,note,updated_by,updated_at
+  PASS: audit export HTTP 200
+  Audit Python result: PYTHON_PASS: audit header OK, 3 rows, 3 with updated_by set
+  PASS: Audit CSV parse: header + row count + updated_by populated
+
+--- Test 4: fake report_id -> expect HTTP 404 ---
+  HTTP status: 404 (expected 404)
+  Body: Report not found.
+  PASS: Fake report_id -> HTTP 404
+  PASS: Fake report_id on audit -> HTTP 404
+
+--- Test 5: coworker access to export -> expect redirect (302) or 403 ---
+  HTTP status: 403 (expected 302 or 403)
+  PASS: Coworker correctly denied access (HTTP 403)
+
+==================================================================
+ALL TESTS PASSED
+==================================================================
+==> Server stopped.

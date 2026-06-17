@@ -1,0 +1,13 @@
+From: alice@mrija.org
+To: bob@mrija.org
+Cc: carol@mrija.org
+Subject: Archive test email one
+Message-ID: <fixture-001@qa.test>
+Date: Wed, 15 Jan 2025 09:00:00 +0000
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+
+This is the first fixture email for QA testing.
+It contains the search token: fixture_unique_keyword_alpha
+And some other content for verification.

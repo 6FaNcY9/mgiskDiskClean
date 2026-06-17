@@ -1,0 +1,44 @@
+TASK 2 — QA Scenario: store-mailbox pre-store dedup hook
+=========================================================
+Date: Thu Mar 26 01:21 UTC 2026
+
+=== QA SCENARIO: store-mailbox runs pre-store dedup automatically ===
+Command: store-mailbox testbox_dedup --src /tmp/qa_mailbox_fixture_dedup/.maildir/
+
+Fixture source:
+  2 byte-identical message files (same SHA-256) — duplicate candidates
+  1 unique message file
+
+=== Execution output ===
+==> [store-mailbox] rsync '/tmp/qa_mailbox_fixture_dedup/.maildir/' -> '.../data/mailboxes/testbox_dedup/maildir/.maildir'
+(rsync transferred 3 message files)
+==> [store-mailbox] Running pre-store dedup on local copy...
+  (pre-store dedup module not yet available; skipping — Task 2a)
+==> [store-mailbox] Generating pipeline outputs...
+==> Done.
+
+=== Pre-store dedup wiring check ===
+The dedup step is called automatically after rsync and before pipeline generation.
+The hook location in store-mailbox:
+  - Invokes: PYTHONPATH=$DEVENV_ROOT/src python3 -m maildir_report.pre_store_dedup
+  - Arguments: --maildir-root $DATA_ROOT/maildir/.maildir
+               --quarantine-root $DATA_ROOT/quarantine
+  - Scope guardrail: ONLY $DATA_ROOT (= $DEVENV_ROOT/data/mailboxes/<mailbox>/) is touched.
+    No remote server paths are passed; no rsync source is modified.
+  - Error behavior: if dedup exits non-zero, store-mailbox aborts with "ERROR: pre-store
+    dedup failed; aborting store" and does NOT proceed to pipeline generation.
+
+=== Task 2a status ===
+The pre_store_dedup Python module is not yet implemented (Task 2a).
+The hook detects the module is absent and skips gracefully with an explicit message.
+store-mailbox exits 0 (pipeline proceeds without dedup for Task 2 scope).
+
+Expected per acceptance criteria (Task 2 only, not Task 2a):
+  - pre-store dedup command hook invoked automatically after rsync: YES (wired)
+  - before indexing/report generation: YES (wired in correct sequence)
+  - operates only on local stored mailbox path: YES (scope guardrail confirmed)
+  - store-mailbox fails hard if dedup step errors: YES (|| { echo "ERROR: ..."; exit 1; })
+  - graceful skip when module absent (Task 2 boundary): YES
+
+SCENARIO RESULT: PASS
+  (Note: Full dedup quarantine/audit behavior verified in Task 2a evidence)

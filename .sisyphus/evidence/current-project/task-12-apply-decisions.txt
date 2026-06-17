@@ -1,0 +1,58 @@
+Task 12 — apply_decisions: dry-run / plan QA
+==============================================
+Date: 2026-03-28 (compliance-fix refresh)
+Tool: python -m maildir_report.apply_decisions
+
+COMPLIANCE FIXES APPLIED
+------------------------
+1. plan --dry-run now writes plan artifact (preview-then-execute workflow)
+2. apply respects plan mode=delete (removes files, no quarantine dir)
+3. audit.jsonl is append-only ("a" mode) — records accumulate across re-applies
+
+SETUP
+-----
+Maildir: /tmp/qa12r_34u10eip/qa_maildir/
+  cur/mail_delete1.eml  118 bytes  (decision=delete, stable_id=aaa*64)
+  cur/mail_keep1.eml    112 bytes  (decision=keep,   stable_id=bbb*64)
+  new/mail_delete2.eml  118 bytes  (decision=delete, stable_id=ccc*64)
+Decisions CSV: 3 rows; 2 marked delete, 1 marked keep.
+
+PLAN --dry-run (FIX #1: must write plan file)
+---------------------------------------------
+Command:
+  python -m maildir_report.apply_decisions plan \
+    --maildir-root /tmp/qa12r_34u10eip/qa_maildir \
+    --decisions-csv /tmp/qa12r_34u10eip/qa_decisions.csv \
+    --output-plan /tmp/qa12r_34u10eip/dry_plan.json \
+    --dry-run
+
+Output:
+  [plan] Found 2 candidate(s) (236 bytes total). Skipped 0. mode=quarantine
+  [plan] candidate_set_hash = 58202373158e64595a407f2ae4fed42031fc9cb995581960b44f686c40e3b459
+  [plan --dry-run] Written to .../dry_plan.json (preview only; run `apply` to execute)
+
+Exit code: 0
+  dry_plan.json written: True (PASS — previously was NOT written, now compliant)
+  candidates count: 2 (correct — only delete rows)
+  candidate_set_hash matches non-dry-run run: PASS
+
+PLAN HASH STABILITY
+-------------------
+Run 1: 58202373158e64595a407f2ae4fed42031fc9cb995581960b44f686c40e3b459
+Run 2: 58202373158e64595a407f2ae4fed42031fc9cb995581960b44f686c40e3b459
+HASH STABLE: True
+
+plan.json structure:
+  plan_id, created_at, expires_at (+24h), maildir_root, mode, candidate_set_hash, candidates
+  candidates sorted by stable_id (deterministic)
+
+FULL TEST SUITE
+---------------
+Command: PYTHONPATH=src python -m pytest -q
+Result:  522 passed in 2.57s
+
+Task-12 specific: 20 passed in 0.75s (tests/test_apply_decisions.py)
+  (Previously 16 tests; 4 new compliance tests added)
+
+--help exit code: 0
+  python -m maildir_report.apply_decisions --help  →  EXIT:0

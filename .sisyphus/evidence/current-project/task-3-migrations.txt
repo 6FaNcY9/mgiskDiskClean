@@ -1,0 +1,99 @@
+TASK 3 — MySQL Schema and Migration Runner
+Scenario: Fresh DB initializes
+Date: 2026-03-26
+PHP: 8.3.30 (devenv)
+MariaDB: 11.4.9
+
+=== STEP 1: php web/src/cli/migrate.php (first run) ===
+Command: php web/src/cli/migrate.php --socket $DEVENV_STATE/mysql.sock
+
+  [apply] 001_initial_schema.sql
+==> Migrations complete. Applied: 1
+
+Exit code: 0
+
+=== STEP 2: Tables in mailreview DB (information_schema) ===
+
+TABLE_NAME          ENGINE   TABLE_ROWS
+decisions           InnoDB   0
+emails              InnoDB   0
+reports             InnoDB   0
+schema_migrations   InnoDB   1
+
+=== STEP 3: Columns per table ===
+
+TABLE_NAME          COLUMN_NAME           COLUMN_TYPE                       COLUMN_KEY  COLUMN_DEFAULT
+decisions           report_id             varchar(255)                      PRI         NULL
+decisions           stable_id             varchar(255)                      PRI         NULL
+decisions           decision              enum('keep','delete','unsure','')             ''
+decisions           note                  text                                          ''
+decisions           updated_at            datetime                                      current_timestamp()
+decisions           updated_by            varchar(255)                                  ''
+emails              report_id             varchar(255)                      PRI         NULL
+emails              stable_id             varchar(255)                      PRI         NULL
+emails              folder                varchar(255)                                  ''
+emails              date                  varchar(64)                                   ''
+emails              sender                varchar(255)                                  ''
+emails              subject               text                                          ''
+emails              total_size_bytes      bigint(20)                                    0
+emails              is_duplicate          tinyint(1)                                    0
+emails              dup_group_id          varchar(255)                                  ''
+emails              dup_rank              int(11)                                       -1
+reports             report_id             varchar(255)                      PRI         NULL
+reports             mailbox               varchar(255)                      MUL         NULL
+reports             generated_at          varchar(64)                                   NULL
+reports             pdf_path              text                                          ''
+reports             manifest_path         text                                          ''
+reports             decisions_seed_path   text                                          ''
+reports             imported_at           datetime                                      current_timestamp()
+schema_migrations   migration             varchar(255)                      PRI         NULL
+schema_migrations   applied_at            datetime                                      current_timestamp()
+
+=== STEP 4: Indexes ===
+
+TABLE_NAME          INDEX_NAME                     COLUMN_NAME   SEQ_IN_INDEX
+decisions           idx_decisions_decision         report_id     1
+decisions           idx_decisions_decision         decision      2
+decisions           idx_decisions_updated_by       report_id     1
+decisions           idx_decisions_updated_by       updated_by    2
+decisions           PRIMARY                        report_id     1
+decisions           PRIMARY                        stable_id     2
+emails              idx_emails_decision_lookup     report_id     1
+emails              idx_emails_decision_lookup     is_duplicate  2
+emails              idx_emails_dup_group           report_id     1
+emails              idx_emails_dup_group           dup_group_id  2
+emails              idx_emails_sender              report_id     1
+emails              idx_emails_sender              sender        2
+emails              idx_emails_subject             report_id     1
+emails              idx_emails_subject             subject       2
+emails              PRIMARY                        report_id     1
+emails              PRIMARY                        stable_id     2
+reports             idx_reports_mailbox            mailbox       1
+reports             PRIMARY                        report_id     1
+schema_migrations   PRIMARY                        migration     1
+
+=== STEP 5: schema_migrations version record ===
+
+migration                applied_at
+001_initial_schema.sql   2026-03-26 02:58:18
+
+=== STEP 6: Idempotency — second run ===
+Command: php web/src/cli/migrate.php --socket $DEVENV_STATE/mysql.sock
+
+  [skip] 001_initial_schema.sql
+==> Migrations complete. Applied: 0
+
+Exit code: 0
+
+=== STEP 7: Secret leak check ===
+git-tracked files searched for plaintext secrets: PASS
+No passwords or credentials in any git-tracked PHP file.
+web/config/local.php is excluded from git via .gitignore.
+
+=== RESULT: PASS ===
+All required tables created with correct columns and indexes.
+Schema version tracked in schema_migrations.
+Idempotent on re-run (skips already applied migrations).
+Engine: InnoDB on all tables.
+Indexes present: (report_id, stable_id) PK on emails+decisions, (report_id, decision),
+  (report_id, dup_group_id), (report_id, updated_by), prefix indexes on subject(64) and sender(128).

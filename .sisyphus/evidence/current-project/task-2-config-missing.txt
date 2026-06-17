@@ -1,0 +1,26 @@
+TASK 2 — QA Scenario: Missing config fails safely
+==================================================
+Date: Thu Mar 26 01:21 UTC 2026
+
+=== QA SCENARIO: Missing config fails safely ===
+Steps:
+  1. Renamed web/config/local.php -> local.php.bak
+  2. Started php -S 127.0.0.1:18083 -t web/public
+  3. GET http://127.0.0.1:18083/
+  4. Restored local.php from backup
+
+HTTP Status: 500
+Response body: Service unavailable: configuration missing. Please contact the administrator.
+
+Expected:
+  - HTTP 500: YES
+  - Non-sensitive error message (no stack trace, no file paths): YES
+
+Stack trace check:
+  Searched response body for: Traceback, stack trace, ErrorException,
+  Fatal error, "in /.+\.php", "line [0-9]+"
+  Result: NONE FOUND
+
+Config restored: YES (no persistent state change)
+
+SCENARIO RESULT: PASS

@@ -1,0 +1,55 @@
+Task 2b: Filename Search Scenario
+==================================
+Date: 2026-03-26
+
+## Search Scenario
+
+Setup: 3 emails indexed for mailbox "demo":
+  - email1: quarterly_report.pdf (shared payload)
+  - email2: quarterly_report.pdf (same payload as email1)
+  - email3: contract.docx (unique payload)
+
+## SQLite Query: filename search by LIKE
+
+$ sqlite3 <data_root>/index.sqlite
+> SELECT original_filename, email_stable_id
+  FROM attachments
+  WHERE original_filename LIKE '%quarterly%';
+
+### RESULT: 2 rows returned (one per email that contains the file)
+
+  Row 1: original_filename='quarterly_report.pdf', email_stable_id=<email1_id>
+  Row 2: original_filename='quarterly_report.pdf', email_stable_id=<email2_id>
+
+PASS: Search by original_filename LIKE '%quarterly%' returns 2 rows ✓
+
+## Schema Notes
+
+  attachments PRIMARY KEY: (stored_path, email_stable_id)
+  → Multiple emails containing the same file get separate rows
+  → stored_path points to the same file on disk (deduped by sha256_size.ext)
+  → email_stable_id links each row to its email in the emails table
+
+  emails.stable_id referenced by attachments.email_stable_id:
+  → JOIN possible: find all emails containing a specific attachment
+  → Reverse JOIN possible: find all attachments for a given email
+
+## Example JOIN Query
+
+  SELECT e.mailbox, e.from_addr, e.subject, e.date, a.original_filename, a.stored_path
+  FROM attachments a
+  JOIN emails e ON a.email_stable_id = e.stable_id
+  WHERE a.original_filename LIKE '%quarterly%'
+  ORDER BY e.date;
+
+## Evidence Source
+
+Python verification script producing all values:
+  SEARCH_quarterly: 2 rows found
+  FILENAME_SEARCH: PASS (2 rows for quarterly_report.pdf - one per email)
+
+Schema columns verified:
+  EMAILS_COLS: ['mailbox', 'stable_id', 'filepath', 'folder', 'date', 'from_addr', 'subject', 'total_size_bytes']
+  ATTACHMENTS_COLS: ['sha256', 'size', 'mime', 'original_filename', 'stored_path', 'email_stable_id']
+
+ALL CHECKS: PASS

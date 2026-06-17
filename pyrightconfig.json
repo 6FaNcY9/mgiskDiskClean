@@ -1,0 +1,7 @@
+{
+  "pythonPath": ".devenv/state/venv/bin/python",
+  "venvPath": ".devenv/state",
+  "venv": "venv",
+  "extraPaths": ["src"],
+  "reportMissingModuleSource": "none"
+}

@@ -1,0 +1,47 @@
+==================================================================
+Task 5 Auth QA -- 2026-03-26T03:38:07Z
+==================================================================
+
+==> Starting PHP server on http://127.0.0.1:18120 ...
+
+--- Scenario 1: Unauthenticated GET / redirects to login ---
+  Status: 302 (expected: 302)
+  PASS
+
+--- Scenario 2: GET /login.php returns 200 + CSRF token ---
+  CSRF: T8F2yLwgEsBTRZUrk8Qr... (len 43)
+  PASS
+
+--- Scenario 3: Coworker login with valid credentials ---
+  Status: 302 (expected: 302)
+  PASS
+
+--- Scenario 4: Coworker cookie -> GET / returns dashboard ---
+  Status: 200 (expected: 200)
+  Body: dashboard HTML confirmed
+  PASS
+
+--- Scenario 5: Coworker accessing /admin/reports gets 403 ---
+  Status: 403 (expected: 403)
+  PASS
+
+--- Scenario 6: Admin login ---
+  CSRF: SDMShdvUeXHTBsZKHBwV...
+  Status: 302 (expected: 302)
+  PASS
+
+--- Scenario 7: Admin accesses /admin/reports ---
+  Status: 200 (expected: 200)
+  Body: JSON reports key found
+  PASS
+
+--- Scenario 8: Wrong password is rejected ---
+  Redirect URL: '' (expected: empty — stays on login page)
+  Body: generic error shown
+  PASS
+
+==================================================================
+ALL AUTH SCENARIOS PASSED
+Evidence: /home/vino/Documents/Projekts/mrijaPageClean/.sisyphus/evidence/current-project/task-5-auth-csrf.txt
+==================================================================
+==> Server stopped.

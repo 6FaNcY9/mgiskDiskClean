@@ -1,0 +1,34 @@
+<p class="hint" style="padding:.5rem 0 .75rem">
+  Mailbox: <strong>{{ mailbox or "all" }}</strong> — {{ emails|length }} shown
+</p>
+{% for email in emails %}
+<article class="email-row"
+         hx-get="/data/email/{{ email.mailbox }}/{{ email.stable_id }}"
+         hx-target="#detail"
+         hx-swap="innerHTML">
+  <span class="from">{{ email.from_addr }}</span>
+  <span class="subject">{{ email.subject }}</span>
+  <span class="date">{{ email.date[:10] if email.date else "" }}</span>
+</article>
+{% else %}
+<p class="empty">No emails.</p>
+{% endfor %}
+{% if emails or page > 0 %}
+<div class="pagination">
+  {% if page > 0 %}
+  <button class="page-btn"
+          hx-get="/data/browse"
+          hx-vals='{"mailbox": "{{ mailbox }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "has_attachment": "{{ has_attachment }}", "page": {{ page - 1 }}}'
+          hx-target="#results"
+          hx-push-url="true">← Prev</button>
+  {% endif %}
+  <span class="page-info page-btn">Page {{ page + 1 }}</span>
+  {% if emails|length == 50 %}
+  <button class="page-btn"
+          hx-get="/data/browse"
+          hx-vals='{"mailbox": "{{ mailbox }}", "date_from": "{{ date_from }}", "date_to": "{{ date_to }}", "has_attachment": "{{ has_attachment }}", "page": {{ page + 1 }}}'
+          hx-target="#results"
+          hx-push-url="true">Next →</button>
+  {% endif %}
+</div>
+{% endif %}

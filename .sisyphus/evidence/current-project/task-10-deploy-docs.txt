@@ -1,0 +1,48 @@
+Task 10: Deployment Hardening — Files Created/Modified
+======================================================
+Date: 2026-03-26
+
+FILES CREATED
+-------------
+web/public/.htaccess
+  - Options -Indexes
+  - RewriteEngine On
+  - RewriteRule ^(config|src)/ - [F,L]  — blocks direct access to config/src if accidentally in webroot
+  - RewriteCond %{REQUEST_FILENAME} !-f / !-d
+  - RewriteRule ^ index.php [QSA,L]      — routes all non-file requests to index.php
+
+web/scripts/qa-task10-hardening.sh
+  - Starts PHP built-in server
+  - Tests maintenance mode (HTTP 503 when flag exists)
+  - Tests normal mode (HTTP 200/302 after flag removed)
+  - Tests /src/ access limitation (404 on PHP built-in; 403 on Apache)
+
+.sisyphus/evidence/current-project/task-10-deploy-docs.txt  (this file)
+.sisyphus/evidence/current-project/task-10-maintenance.txt
+.sisyphus/evidence/current-project/task-10-block.txt
+
+FILES MODIFIED
+--------------
+web/public/index.php
+  - Moved security headers to TOP (before config load and DB connections)
+  - Updated Referrer-Policy: same-origin → strict-origin-when-cross-origin
+  - Updated CSP: added script-src 'self' 'unsafe-inline'
+  - Changed maintenance flag path: web/data/.maintenance → web/maintenance.flag
+  - Changed maintenance response from plain text → HTML with <h1>Maintenance</h1>
+  - Maintenance check now fires before config load (not after)
+
+README.md
+  - Appended "## Deployment & Operations" section at bottom (did NOT overwrite existing content)
+
+.sisyphus/plans/current-project.md
+  - Task 10 checkbox updated from [ ] to [x]
+
+README.md — Deployment & Operations outline
+--------------------------------------------
+1. Project Overview (1 paragraph about PHP+MySQL review app)
+2. Directory Layout (ASCII tree: src/, web/public/, web/config/, web/src/, web/migrations/)
+3. Coworker Review Flow (7-step login → review → notify admin)
+4. Admin Export Flow (4-step login → overview → GET /admin/export/decisions → apply-decisions CLI)
+5. FTP Deploy Steps (7-step lftp mirror → config upload → migrations → verify → secure check)
+6. Config Instructions (cp local.php.example → fill db/password_hash → never commit)
+7. Maintenance Mode (touch/rm web/maintenance.flag)

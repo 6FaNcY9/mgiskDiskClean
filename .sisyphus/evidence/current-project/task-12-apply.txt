@@ -1,0 +1,110 @@
+Task 12 — apply_decisions: apply + quarantine + mode=delete + audit-append QA
+=============================================================================
+Date: 2026-03-28 (compliance-fix refresh)
+Tool: python -m maildir_report.apply_decisions apply
+
+COMPLIANCE FIXES APPLIED
+------------------------
+FIX #2: apply respects plan mode — quarantine moves files; delete removes them.
+FIX #3: audit.jsonl opened with "a" (append) not "w" — records accumulate.
+
+=============================================================================
+SCENARIO A: mode=quarantine (default)
+=============================================================================
+Plan: plan_id=a1d64f6b-..., mode=quarantine
+  candidate_set_hash: 58202373158e64595a407f2ae4fed42031fc9cb995581960b44f686c40e3b459
+
+FIRST APPLY
+-----------
+Command:
+  python -m maildir_report.apply_decisions apply \
+    --plan .../plan1.json \
+    --confirm 58202373
+
+Output:
+  [apply] Done. Moved: 2, Skipped: 0.
+  Audit: .../qa_maildir/.quarantine/a1d64f6b-.../audit.jsonl
+
+Exit code: 0
+
+FILE STATE AFTER APPLY:
+  cur/mail_delete1.eml:  False  (quarantined — PASS)
+  cur/mail_keep1.eml:    True   (untouched keep row — PASS)
+  new/mail_delete2.eml:  False  (quarantined — PASS)
+
+QUARANTINE STRUCTURE:
+  .quarantine/a1d64f6b-.../audit.jsonl
+  .quarantine/a1d64f6b-.../cur/mail_delete1.eml
+  .quarantine/a1d64f6b-.../new/mail_delete2.eml
+
+audit.jsonl after first apply (2 entries):
+  stable_id=aaaaaaaa... moved_at=2026-03-28T20:57:11Z note=
+  stable_id=cccccccc... moved_at=2026-03-28T20:57:11Z note=
+
+IDEMPOTENCY RE-APPLY (FIX #3 — append-only audit)
+--------------------------------------------------
+Command (same plan, same confirm):
+  python -m maildir_report.apply_decisions apply --plan .../plan1.json --confirm 58202373
+
+Output:
+  [apply] Already quarantined (skipping): '.../cur/mail_delete1.eml'
+  [apply] Already quarantined (skipping): '.../new/mail_delete2.eml'
+  [apply] Done. Moved: 0, Skipped: 2. Audit: .../audit.jsonl
+
+Exit code: 0
+
+audit.jsonl after SECOND apply (4 entries — APPEND-ONLY verified):
+  stable_id=aaaaaaaa... moved_at=2026-03-28T20:57:11Z note=
+  stable_id=cccccccc... moved_at=2026-03-28T20:57:11Z note=
+  stable_id=aaaaaaaa... moved_at=2026-03-28T20:57:11Z note=already_quarantined
+  stable_id=cccccccc... moved_at=2026-03-28T20:57:11Z note=already_quarantined
+
+Previously: second apply overwrote with 2 entries (bug). Now: 4 entries (PASS).
+
+RESTORE
+-------
+Command:
+  python -m maildir_report.apply_decisions restore \
+    --plan-id a1d64f6b-... \
+    --maildir-root .../qa_maildir
+
+Output:
+  [restore] Done. Restored: 2, Skipped: 2.
+
+After restore:
+  cur/mail_delete1.eml: True (restored — PASS)
+  new/mail_delete2.eml: True (restored — PASS)
+
+Note: "Skipped: 2" because second apply's audit entries (already_quarantined)
+reference same quarantine_path; after first restore move those files are gone,
+so restore skips them idempotently. Files are still correctly back.
+
+=============================================================================
+SCENARIO B: mode=delete (FIX #2)
+=============================================================================
+Plan: plan_id=7b8a81bf-..., mode=delete
+  (same decisions CSV, different plan produced with --mode delete)
+
+APPLY (mode=delete)
+-------------------
+Command:
+  python -m maildir_report.apply_decisions apply \
+    --plan .../plan_delete.json \
+    --confirm 58202373
+
+Output:
+  [apply] Done. Moved: 2, Skipped: 0.
+  Audit: .../qa_maildir/.cleanup_log/7b8a81bf-.../audit.jsonl
+
+Exit code: 0
+
+FILE STATE AFTER DELETE-APPLY:
+  cur/mail_delete1.eml exists: False  (deleted permanently — PASS)
+  cur/mail_keep1.eml exists:   True   (untouched — PASS)
+  new/mail_delete2.eml exists: False  (deleted permanently — PASS)
+  .quarantine/<plan_id>/ exists: False  (no quarantine dir created — PASS)
+  .cleanup_log/<plan_id>/audit.jsonl exists: True (delete audit written — PASS)
+
+audit.jsonl entries for delete mode:
+  {"action": "delete", "original_path": ".../cur/mail_delete1.eml", "deleted_at": "..."}
+  {"action": "delete", "original_path": ".../new/mail_delete2.eml", "deleted_at": "..."}

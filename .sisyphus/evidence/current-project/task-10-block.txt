@@ -1,0 +1,45 @@
+Task 10: Direct Access Blocking Evidence
+=========================================
+Date: 2026-03-26
+
+--- .htaccess (web/public/.htaccess) ---
+
+Options -Indexes
+RewriteEngine On
+# Deny config/src if accidentally in webroot
+RewriteRule ^(config|src)/ - [F,L]
+# Route all non-file requests through index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+
+--- Test: Direct access to /src/ via PHP built-in server ---
+
+$ curl -s -o /tmp/body3.txt -w "%{http_code}" http://127.0.0.1:8799/src/
+
+HTTP status: 404
+Body: Not found.
+
+IMPORTANT LIMITATION — PHP built-in server does NOT honor .htaccess:
+----------------------------------------------------------------------
+The PHP built-in server (`php -S`) does not implement mod_rewrite or .htaccess
+processing. It serves files directly from the docroot or routes to index.php for
+missing files. Therefore:
+
+- On PHP built-in server: /src/ → 404 (file not found — src/ is not under web/public/)
+- On Apache with mod_rewrite enabled: /src/ → 403 Forbidden (via F flag in .htaccess)
+- On Apache without mod_rewrite: /src/ → 404 (same reason — not in webroot)
+
+The 404 on PHP built-in server is still safe because web/src/ is not in web/public/,
+so its contents are never directly accessible. The .htaccess rule is an additional
+defense layer for Apache deployments where web/src/ might somehow end up in webroot.
+
+Security model for production (Apache):
+- web/public/ is the Apache DocumentRoot
+- web/src/ and web/config/ are OUTSIDE DocumentRoot (one level up)
+- .htaccess blocks any path starting with config/ or src/ at the Apache layer (403)
+- Options -Indexes prevents directory listings
+
+RESULT: PASS (with limitation documented)
+.htaccess is Apache-only; PHP built-in server does not honor it.
+On Apache, the RewriteRule ^(config|src)/ - [F,L] will return 403.

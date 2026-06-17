@@ -1,0 +1,122 @@
+TASK 2 — PHP Skeleton + DevEnv Wiring — Acceptance Evidence
+=============================================================
+Date: Thu Mar 26 01:21 UTC 2026
+
+=== ACCEPTANCE CRITERIA CHECKS ===
+
+--- 1. devenv shell -- php -v ---
+PHP 8.3.30 (cli) (built: Jan 13 2026 22:36:55) (NTS)
+Copyright (c) The PHP Group
+Zend Engine v4.3.30, Copyright (c) Zend Technologies
+    with Zend OPcache v8.3.30, Copyright (c), by Zend Technologies
+
+PASS: PHP 8.3.x confirmed.
+
+--- 2. php -l web/public/index.php ---
+No syntax errors detected in web/public/index.php
+
+PASS: Lint exits 0.
+
+--- 3. devenv shell -- db-start --help (exit 0) ---
+Usage: db-start
+
+  Start the local MariaDB dev server (managed by devenv services.mysql).
+  Creates the 'mailreview' schema and user if they do not yet exist.
+
+Options:
+  --help    Show this help message and exit
+
+Exit code: 0
+PASS
+
+--- 4. devenv shell -- db-migrate --help (exit 0) ---
+Usage: db-migrate [--socket <path>]
+
+  Run pending SQL migrations in web/migrations/ against the
+  configured MariaDB instance.
+
+Options:
+  --socket <path>   MariaDB socket path (default: $DEVENV_STATE/mysql.sock)
+  --help            Show this help message and exit
+
+Environment:
+  DB_SOCKET   Override socket path (alternative to --socket)
+
+Exit code: 0
+PASS
+
+--- 5. devenv shell -- store-mailbox --help (exit 0) ---
+Usage: store-mailbox <mailbox> [--src <rsync-source>]
+
+  Store a remote mailbox locally under $DEVENV_ROOT/data/mailboxes/<mailbox>/.
+  Layout created:
+    maildir/.maildir/   rsync target (Maildir format)
+    reports/            pipeline outputs (PDF, manifest, decisions CSV)
+    attachments/        extracted attachment files (Task 2b)
+    index.sqlite        per-mailbox index DB (Task 3/4)
+
+  Workflow:
+    1. rsync remote mailbox into maildir/.maildir/
+    2. Run pre-store dedup (quarantine-only) on local copy only
+    3. Run maildir_report pipeline into reports/
+
+  Scope guardrail: dedup operates ONLY on local data/ copy.
+  No changes are made to the remote server mailbox.
+
+Options:
+  --src <rsync-source>   Override rsync source URL
+  --help                 Show this help message and exit
+
+Exit code: 0
+PASS
+
+--- 6. devenv shell -- index-mailbox --help (exit 0) ---
+Usage: index-mailbox <mailbox>
+
+  (Re)build the per-mailbox SQLite index from stored maildir and
+  extracted attachments.
+
+  Index written to:
+    $DEVENV_ROOT/data/mailboxes/<mailbox>/index.sqlite
+
+  Requires: store-mailbox to have run first.
+  Implemented fully in Task 2b.
+
+Options:
+  --help    Show this help message and exit
+
+Exit code: 0
+PASS
+
+--- 7. devenv shell -- apply-decisions --help (exit 0) ---
+Usage: apply-decisions <mailbox> <reviewed_decisions.csv> [--mode quarantine|delete] [--dry-run]
+
+  Apply a reviewed decisions CSV to the local stored mailbox copy.
+  Operates ONLY on: $DEVENV_ROOT/data/mailboxes/<mailbox>/maildir/.maildir/
+
+  Workflow (plan-then-apply):
+    1. plan  — writes cleanup_plan.json with candidate list + candidate_set_hash
+    2. apply — requires --plan cleanup_plan.json --confirm <hash-prefix>
+
+Options:
+  --mode quarantine|delete   Action for 'delete' rows (default: quarantine)
+  --dry-run                  Print plan; write cleanup_plan.json; no file moves
+  --help                     Show this help message and exit
+  Implemented fully in Task 12.
+
+Exit code: 0
+PASS
+
+=== QA SCENARIO: PHP server starts ===
+Steps: Start `php -S 127.0.0.1:18084 -t web/public` and curl `/`
+
+PHP version: PHP 8.3.30 (cli) (built: Jan 13 2026 22:36:55) (NTS)
+HTTP Status: 200
+Response body: OK
+Expected: HTTP 200 and body contains "OK"
+
+SCENARIO RESULT: PASS
+
+=== SUMMARY ===
+All 7 acceptance criteria: PASS
+QA scenario (PHP server starts + GET /): PASS

@@ -1,0 +1,37 @@
+==================================================================
+Task 5 CSRF Rejection QA -- 2026-03-26T03:38:08Z
+==================================================================
+
+==> Starting PHP server on http://127.0.0.1:18121 ...
+
+==> Establishing admin session ...
+  Admin session established.
+
+==> Establishing coworker session ...
+  Coworker session established.
+
+--- Scenario 1: POST /admin/import without csrf_token (admin session) ---
+  Status: 403 (expected: 403)
+  PASS: POST /admin/import without CSRF token returns 403
+
+--- Scenario 2: POST /review/update without csrf_token (coworker session) ---
+  Status: 403 (expected: 403)
+  PASS: POST /review/update without CSRF token returns 403
+
+--- Scenario 3: POST /logout without csrf_token (admin session) ---
+  Status: 403 (expected: 403)
+  PASS: POST /logout without CSRF token returns 403
+
+--- Scenario 4: POST /admin/import with wrong csrf_token (form field) ---
+  Status: 403 (expected: 403)
+  PASS: POST /admin/import with wrong CSRF token returns 403
+
+--- Scenario 5: Unauthenticated POST to protected endpoint ---
+  Status: 302 (expected: 302 redirect to login, not 403)
+  PASS: Unauthenticated POST redirects to login
+
+==================================================================
+ALL CSRF REJECTION SCENARIOS PASSED
+Evidence: /home/vino/Documents/Projekts/mrijaPageClean/.sisyphus/evidence/current-project/task-5-csrf-reject.txt
+==================================================================
+==> Server stopped.

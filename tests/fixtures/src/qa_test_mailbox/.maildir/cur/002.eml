@@ -1,0 +1,19 @@
+From: bob@mrija.org
+To: alice@mrija.org
+Subject: Archive test email two with attachment
+Message-ID: <fixture-002@qa.test>
+Date: Thu, 16 Jan 2025 10:30:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary_002"
+
+--boundary_002
+Content-Type: text/plain; charset=utf-8
+
+Second fixture email. Contains: fixture_unique_keyword_beta
+--boundary_002
+Content-Type: application/pdf; name="test_document.pdf"
+Content-Disposition: attachment; filename="test_document.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKdGVzdA==
+--boundary_002--

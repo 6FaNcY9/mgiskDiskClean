@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MrijaArchive</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
+
+  <header>
+    <h1>MrijaArchive</h1>
+    <div class="search-bar">
+      <input type="search" id="q" name="q" placeholder="Search emails…"
+        hx-get="/data/search"
+        hx-trigger="keyup changed delay:300ms, search"
+        hx-target="#results"
+        hx-include="#filter-form"
+        hx-push-url="true"
+        hx-indicator="#spinner"
+        autofocus>
+      <span id="spinner" class="htmx-indicator">…</span>
+    </div>
+    <nav>
+      <a hx-get="/data/browse"
+         hx-target="#results"
+         hx-push-url="true"
+         hx-include="#filter-form">Browse</a>
+    </nav>
+    <div id="status-bar"
+         hx-get="/data/status-bar"
+         hx-trigger="load, every 3s"
+         hx-swap="outerHTML"></div>
+  </header>
+
+  <div id="layout">
+    <div id="filters-col"
+         hx-get="/data/filters"
+         hx-trigger="load"
+         hx-swap="innerHTML"></div>
+    <main id="results">
+      <p class="hint">Type to search or click Browse.</p>
+    </main>
+    <aside id="detail"></aside>
+  </div>
+
+</body>
+</html>

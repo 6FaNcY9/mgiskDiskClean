@@ -1,61 +1,104 @@
 {
-  "active_plan": "/home/vino/Documents/Projekts/mrijaPageClean/.sisyphus/plans/maildir-pdf-report.md",
-  "started_at": "2026-03-24T16:08:00.747Z",
+  "active_plan": "/home/vino/Documents/Projekts/mrijaPageClean/.sisyphus/plans/current-project.md",
+  "started_at": "2026-03-26T01:47:19+01:00",
   "session_ids": [
     "ses_2dff6c5ccffe8Kd8dJl29GQHdg",
-    "ses_2df643708ffeMKNNuCrlvQmcCc",
-    "ses_2df64374fffehitNPllTo69ugz",
-    "ses_2df6436c3ffeuvhWQooEbgJGEf",
-    "ses_2df64368dffeCGJnmWMyUTHZep",
-    "ses_2df5f8235ffeg9i33K7HbrxHvY",
-    "ses_2df55aabeffeRFrTh3cTghAAAB",
-    "ses_2df4e5f0cffeCGIAWI0Epvet0p",
-    "ses_2df46075bffeUzbTgJmQCcLUTL",
-    "ses_2df3e58b5ffer2aTB7u1DYaCQe",
-    "ses_2df38426fffeHe3bxeg1lGv3dF",
-    "ses_2df320ecaffeq6SZ2M2tKglUIH",
-    "ses_2df2a8916ffeTrzvIXetU3sOCG",
-    "ses_2df2208efffeXiQDjPCF0XjWBv",
-    "ses_2df1c79cdffed0Bof7zPmPQEbp",
-    "ses_2def3fbe9ffe8Zar1pxyAnipK1",
-    "ses_2dee1f6d7ffe1mW2v4iUxgjLct",
-    "ses_2ded042e6ffelgJeSBQgg1cxuP",
-    "ses_2d9a80c44ffeDXGk3v5ix0O8te",
-    "ses_2d9a2b807ffeN2uSW5x1FlfW7B",
-    "ses_2d99c1e57ffeRCV14L3XOdNre0",
-    "ses_2d99c1c85ffeRofLCKu177s5eJ",
-    "ses_2d99c19abffeWe25WXkk2KEv8F",
-    "ses_2d99c1ae7ffeiNTEOFDcfjug6h"
+    "ses_2d860cf0cffeLErFD6NEMBEqpN",
+    "ses_2d850a1d1ffenxzwbE7JcABNOL",
+    "ses_2d84c9eebffeXfnAESwaZQM9tB",
+    "ses_2d83c9f59ffeQs5qsicwuwLMqP",
+    "ses_2d833ece2ffePwpCESKVoE6MqB",
+    "ses_2d826ae1effeTk7KWPbiUb98E7",
+    "ses_2d7ee005bffe3L1kG6kRXSJtHt",
+    "ses_2d7d89becffet78PIKtynJSYNC",
+    "ses_2d7c5a0e4ffezTEOWeWnBVrTRD",
+    "ses_2d72dc9bdffeGd2zHzTOBqA4R7",
+    "ses_2d7238fa2ffe0Z2G9XmXg3P1zd",
+    "ses_2d71cff06ffe3IlGOlHWdGxyOw",
+    "ses_2d71721fcffem68LIqSh8dJzCH",
+    "ses_2cd992131ffe4EGXU4n2t1KsSU",
+    "ses_2ca38bf2effe3z1inVtS8inum4",
+    "ses_2c9cd3896ffelVC5WaPvz5ZdwQ"
   ],
-  "plan_name": "maildir-pdf-report",
+  "plan_name": "current-project",
   "agent": "atlas",
   "task_sessions": {
-    "todo:15": {
-      "task_key": "todo:15",
-      "task_label": "15",
-      "task_title": "Update `devenv.nix` workflow commands (remove serving, keep scan-mailbox)",
-      "session_id": "ses_2d9a80c44ffeDXGk3v5ix0O8te",
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Extend `decisions.csv` schema with reviewer context columns",
+      "session_id": "ses_2d850a1d1ffenxzwbE7JcABNOL",
       "agent": "Sisyphus-Junior",
-      "category": "devops",
-      "updated_at": "2026-03-25T18:55:07.184Z"
+      "category": "quick",
+      "updated_at": "2026-03-26T01:10:55.987Z"
     },
-    "todo:16": {
-      "task_key": "todo:16",
-      "task_label": "16",
-      "task_title": "Strip serving stack from repo (nginx + cloudflared)",
-      "session_id": "ses_2d9a2b807ffeN2uSW5x1FlfW7B",
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Add PHP 8.3 + MySQL dev environment wiring",
+      "session_id": "ses_2d84c9eebffeXfnAESwaZQM9tB",
       "agent": "Sisyphus-Junior",
       "category": "unspecified-high",
-      "updated_at": "2026-03-25T19:01:46.653Z"
+      "updated_at": "2026-03-26T01:24:20.273Z"
     },
-    "final-wave:f1": {
-      "task_key": "final-wave:f1",
-      "task_label": "F1",
-      "task_title": "Determinism + audit verification",
-      "session_id": "ses_2d99c1e57ffeRCV14L3XOdNre0",
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "Define MySQL schema and migration runner keyed by report_id",
+      "session_id": "ses_2d826ae1effeTk7KWPbiUb98E7",
       "agent": "Sisyphus-Junior",
-      "category": "unspecified-low",
-      "updated_at": "2026-03-25T19:35:52.834Z"
+      "category": "deep",
+      "updated_at": "2026-03-26T02:03:01.120Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Implement report import (manifest + decisions seed) into SQLite",
+      "session_id": "ses_2d7ee005bffe3L1kG6kRXSJtHt",
+      "updated_at": "2026-03-26T03:11:45.611Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Add authentication + sessions + CSRF for all state changes (coworker + admin)",
+      "session_id": "ses_2d7d89becffet78PIKtynJSYNC",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-03-26T03:36:41.140Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "Build coworker review UI + i18n toggle (German/Ukrainian) + admin overview",
+      "session_id": "ses_2d7c5a0e4ffezTEOWeWnBVrTRD",
+      "agent": "Sisyphus-Junior",
+      "category": "visual-engineering",
+      "updated_at": "2026-03-26T03:48:12.015Z"
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "Attachment access: minimal “view/download attachments” strategy",
+      "session_id": "ses_2d7a992e5ffeVXLAH38rXC8hpC",
+      "updated_at": "2026-03-26T04:33:41.201Z"
+    },
+    "todo:11": {
+      "task_key": "todo:11",
+      "task_label": "11",
+      "task_title": "(Optional) IMAP ingestion via `imap-tools` (replace rsync Maildir fetch)",
+      "session_id": "ses_2ca38bf2effe3z1inVtS8inum4",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-03-28T18:57:26.766Z"
+    },
+    "todo:12": {
+      "task_key": "todo:12",
+      "task_label": "12",
+      "task_title": "Local Python CLI tool: apply reviewed decisions file (delete/quarantine local emails)",
+      "session_id": "ses_2c9cd3896ffelVC5WaPvz5ZdwQ",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-03-28T20:50:34.776Z"
     }
   }
 }

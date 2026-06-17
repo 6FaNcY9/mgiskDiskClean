@@ -1,0 +1,61 @@
+# Task 4 — Import success evidence
+# Generated: 2026-03-26T03:09:50Z
+
+## Environment
+PHP: PHP 8.3.30 (cli) (built: Jan 13 2026 22:36:55) (NTS)
+PHP Server: 127.0.0.1:18010
+Data dir: /home/vino/Documents/Projekts/mrijaPageClean/data
+Mailbox: testbox
+Manifest: data/mailboxes/testbox/reports/maildir.manifest.json
+Decisions CSV: data/mailboxes/testbox/reports/maildir.decisions.csv
+
+## Scenario 1: Import success (POST /admin/import)
+
+Command:
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d '{"mailbox":"testbox"}' http://127.0.0.1:18010/admin/import
+
+HTTP Status: 200
+Response body: {"status":"imported","report_id":"c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c","email_count":2,"decisions_seed_path":"\/home\/vino\/Documents\/Projekts\/mrijaPageClean\/data\/mailboxes\/testbox\/reports\/maildir.decisions.csv"}
+
+Expected: HTTP 200, report_id = manifest pdf_sha256, email_count = 2, decisions_seed_path set
+PASS: HTTP 200
+
+## DB state after import
+
+report_id	mailbox	generated_at	has_seed
+c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c	testbox	2026-03-26T01:27:58+00:00	1
+
+stable_id	folder	date	sender	subject	total_size_bytes	is_duplicate	dup_rank
+6b055e0f296ff239f745500dc013220eb9b16fb6e3a2c6b3f5e68edd18508d02	INBOX	2024-01-01 10:00	a@example.com	Fixture One	236	0	-1
+8d5c836b2e784f613bfd32d8531a041d957aad61baaae07e95056aa8bdb6a29c	INBOX	2024-01-02 10:00	a@example.com	Fixture Two	236	0	-1
+
+report_count
+1
+email_count
+2
+
+## Scenario 2: Idempotent re-import (same mailbox, second POST)
+
+Command:
+  curl -s -X POST -H "Content-Type: application/json" \
+    -d '{"mailbox":"testbox"}' http://127.0.0.1:18010/admin/import
+
+HTTP Status: 200
+Response body: {"status":"imported","report_id":"c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c","email_count":2,"decisions_seed_path":"\/home\/vino\/Documents\/Projekts\/mrijaPageClean\/data\/mailboxes\/testbox\/reports\/maildir.decisions.csv"}
+PASS: HTTP 200
+
+DB counts after re-import (expected: report_count=1, email_count=2):
+report_count
+1
+email_count
+2
+
+PASS: Idempotent upsert confirmed (no row growth)
+
+## Scenario 3: GET /admin/reports list
+
+HTTP Status: 200
+Response: {"reports":[{"report_id":"c3d2545d5614d813f2e048ae0d4c93f0cb07ed01ad032da6d2e6b155745ad48c","mailbox":"testbox","generated_at":"2026-03-26T01:27:58+00:00","imported_at":"2026-03-26 04:09:50","decisions_seed_path":"\/home\/vino\/Documents\/Projekts\/mrijaPageClean\/data\/mailboxes\/testbox\/reports\/maildir.decisions.csv"}]}
+
+PASS: HTTP 200

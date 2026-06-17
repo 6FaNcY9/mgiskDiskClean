@@ -3,8 +3,34 @@ reports/
 logs/
 nginx/.htpasswd
 nginx/nginx.pid
+__pycache__/
+*.py[cod]
+dist/
 
 # devenv
 .devenv/
 .devenv.flake.nix
 devenv.lock
+
+# web app — local secrets (never commit)
+web/config/local.php
+
+# local secrets — SSH passwords, env overrides
+.env
+.env.push
+
+# local mailbox data (large; outside webroot)
+data/
+!data/mailboxes.txt.example
+
+# experimental Python web layer (tracked on wip/python-web-layer branch)
+src/web/
+
+# git worktrees
+.worktrees/
+
+# IDE / tooling
+.idea/
+.superpowers/
+.sisyphus/
+*.zip

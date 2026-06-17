@@ -1,0 +1,25 @@
+<div id="status-bar"
+     hx-get="/data/status-bar"
+     hx-trigger="every {{ refresh_interval }}"
+     hx-swap="outerHTML">
+  <span class="state-badge state-{{ state }}">{{ state_label }}</span>
+  {% if email_count is not none %}
+    <span class="stat-count">{{ email_count }} emails</span>
+  {% endif %}
+  {% if is_updating %}
+    <div class="upd-wrap">
+      <div class="upd-bar" style="width: {{ progress }}%"></div>
+    </div>
+    <span class="stat-count">{{ update_status }}{% if progress %} — {{ progress }}%{% endif %}</span>
+  {% else %}
+    <button class="upd-btn"
+            hx-post="/api/update"
+            hx-swap="none"
+            hx-disabled-elt="this">
+      ↓ Update
+    </button>
+  {% endif %}
+  {% if error %}
+    <span class="error-msg" title="{{ error }}">{{ error }}</span>
+  {% endif %}
+</div>

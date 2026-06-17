@@ -1,0 +1,205 @@
+{
+  "info": {
+    "name": "MrijaClient API",
+    "_postman_id": "mrija-client-api-v1",
+    "description": "Control and data API for the MrijaArchive local client.\n\nAll /api/* endpoints require X-Api-Key header (set in environment).\nAll /data/* endpoints are unauthenticated HTMX fragment routes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8080" },
+    { "key": "api_key",  "value": "dev-key" }
+  ],
+  "item": [
+    {
+      "name": "Control API",
+      "item": [
+        {
+          "name": "Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/api/status", "host": ["{{base_url}}"], "path": ["api", "status"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has state', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(['running','no_data','updating','error','starting']).to.include(j.state);",
+                  "});",
+                  "pm.test('Has email_count', () => pm.expect(pm.response.json()).to.have.property('email_count'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status — no key (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/status", "host": ["{{base_url}}"], "path": ["api", "status"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('401 without key', () => pm.response.to.have.status(401));"] }
+            }
+          ]
+        },
+        {
+          "name": "Open local file",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key",     "value": "{{api_key}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"path\": \"{{db_path}}\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/open", "host": ["{{base_url}}"], "path": ["api", "open"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 or 404', () => pm.expect([200,404]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('state is running', () => pm.expect(pm.response.json().state).to.eql('running'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trigger update",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/api/update", "host": ["{{base_url}}"], "path": ["api", "update"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 started or 409 already updating', () => {",
+                  "  pm.expect([200,409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update progress (SSE stream)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/api/update/progress", "host": ["{{base_url}}"], "path": ["api", "update", "progress"] },
+            "description": "Server-Sent Events stream. Each event is JSON: {\"percent\": 0-100, \"status\": \"...\"}.\nStream ends when update completes or fails.\nUse a browser EventSource or curl --no-buffer to consume."
+          }
+        },
+        {
+          "name": "Restart (reload current DB)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/api/restart", "host": ["{{base_url}}"], "path": ["api", "restart"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"] }
+            }
+          ]
+        },
+        {
+          "name": "Shutdown",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Api-Key", "value": "{{api_key}}" }],
+            "url": { "raw": "{{base_url}}/api/shutdown", "host": ["{{base_url}}"], "path": ["api", "shutdown"] },
+            "description": "Stops the server process. Client will no longer respond after ~200ms."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data Routes (HTMX fragments)",
+      "item": [
+        {
+          "name": "Status bar fragment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/data/status-bar", "host": ["{{base_url}}"], "path": ["data", "status-bar"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns HTML', () => pm.expect(pm.response.headers.get('content-type')).to.include('text/html'));",
+                  "pm.test('Has state badge', () => pm.expect(pm.response.text()).to.include('state-badge'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/data/search?q=invoice",
+              "host": ["{{base_url}}"],
+              "path": ["data", "search"],
+              "query": [{ "key": "q", "value": "invoice" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns HTML', () => pm.expect(pm.response.headers.get('content-type')).to.include('text/html'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Browse",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/data/browse", "host": ["{{base_url}}"], "path": ["data", "browse"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns HTML', () => pm.expect(pm.response.headers.get('content-type')).to.include('text/html'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
