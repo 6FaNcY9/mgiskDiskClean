@@ -650,6 +650,27 @@
         exit 1
       fi
     '';
+
+    mrija.exec = ''
+      DB="''${1:-$DEVENV_ROOT/data/client/mail_archive.sqlite}"
+      if [ ! -f "$DB" ]; then
+        echo "ERROR: database not found: $DB"
+        echo "Usage: mrija [path/to/archive.sqlite]"
+        exit 1
+      fi
+      PYTHONPATH="$DEVENV_ROOT/src" python3 -m mrija_client --db "$DB" --no-tui
+    '';
+
+    mrija-admin.exec = ''
+      DB="''${1:-$DEVENV_ROOT/data/client/mail_archive.sqlite}"
+      if [ ! -f "$DB" ]; then
+        echo "ERROR: database not found: $DB"
+        echo "Usage: mrija-admin [path/to/archive.sqlite]"
+        exit 1
+      fi
+      PYTHONPATH="$DEVENV_ROOT/src" python3 -m mrija_client --db "$DB" --no-tui --mode admin
+    '';
+
   };
 
   # ── Shell welcome message ─────────────────────────────────────────────────
@@ -667,6 +688,8 @@
   echo "  mail-browser                   launch terminal UI (auto-starts DB)"
   echo "  freshclam-update               download/refresh ClamAV virus signatures"
   echo "  verify-archive [--mailbox x]   integrity + malware scan of all attachments"
+  echo "  mrija [db]                     start web UI (user mode, opens browser)"
+  echo "  mrija-admin [db]               start web UI (admin mode, shows logs)"
     echo "  ──────────────────────────────────────────────────────"
     echo "  data    : $DEVENV_ROOT/data/"
     echo "  logs    : $DEVENV_ROOT/logs/"
