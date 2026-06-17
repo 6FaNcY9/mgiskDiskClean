@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
@@ -12,11 +13,27 @@ from mrija_client.state import ClientState
 
 router = APIRouter()
 
+_rate_lock = threading.Lock()
+_last_call: dict[str, float] = {}
+_RATE_LIMIT_SEC = 10  # destructive endpoints: one call per 10 s
+
 
 async def _check_key(x_api_key: str = Header(default="")) -> None:
     expected = os.environ.get("MRIJA_API_KEY", "dev-key")
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+def _rate_limit(endpoint: str) -> None:
+    with _rate_lock:
+        last = _last_call.get(endpoint, 0.0)
+        now = time.monotonic()
+        if now - last < _RATE_LIMIT_SEC:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: wait {_RATE_LIMIT_SEC - int(now - last)}s",
+            )
+        _last_call[endpoint] = now
 
 
 class OpenRequest(BaseModel):
@@ -56,6 +73,7 @@ async def open_file(req: OpenRequest):
 
 @router.post("/restart", dependencies=[Depends(_check_key)])
 async def restart():
+    _rate_limit("restart")
     from mrija_client.server import get_state
     from mrija_client.db import MailDB
     state = get_state()
@@ -72,6 +90,7 @@ async def restart():
 
 @router.post("/shutdown", dependencies=[Depends(_check_key)])
 async def shutdown():
+    _rate_limit("shutdown")
     from mrija_client.server import get_state
     state = get_state()
     state.state = ClientState.STOPPED
@@ -89,6 +108,7 @@ async def shutdown():
 
 @router.post("/update", dependencies=[Depends(_check_key)])
 async def trigger_update():
+    _rate_limit("update")
     from mrija_client.server import get_state
     from mrija_client.updater import run_update
     state = get_state()
