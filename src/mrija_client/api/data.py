@@ -166,6 +166,7 @@ async def update_check():
 
 @router.get("/logs", response_class=HTMLResponse)
 async def logs_fragment(client: str = "", limit: int = 100):
+    limit = min(max(limit, 1), 500)
     from mrija_client.server import get_state
     state = get_state()
 
@@ -175,7 +176,7 @@ async def logs_fragment(client: str = "", limit: int = 100):
     entries = entries[-limit:]
 
     if not entries:
-        return HTMLResponse('<tr><td colspan="6" class="log-empty">No requests yet.</td></tr>')
+        return HTMLResponse('<tr><td colspan="7" class="log-empty">No requests yet.</td></tr>')
 
     rows = []
     for e in reversed(entries):
@@ -229,11 +230,12 @@ async def droplet_logs_fragment(client: str = ""):
     if not droplet_url or not droplet_key:
         return HTMLResponse('<tr><td colspan="6" class="log-empty">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</td></tr>')
     try:
+        from urllib.parse import urlencode
         url = f"{droplet_url}/data/logs"
         if client:
-            url += f"?client={client}"
+            url += "?" + urlencode({"client": client})
         req = urllib.request.Request(url, headers={"X-Api-Key": droplet_key})
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=3) as r:
             body = r.read().decode()
         return HTMLResponse(body)
     except Exception as exc:

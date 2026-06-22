@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js"></script>
 </head>
-<body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
+<body hx-headers='{"X-Api-Key": {{ api_key | tojson }}}'>
 
   <header>
     <h1>MrijaArchive</h1>

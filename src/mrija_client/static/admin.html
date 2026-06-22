@@ -136,11 +136,11 @@
     #scroll-local, #scroll-droplet { height: 1px; }
   </style>
 </head>
-<body hx-headers='{"X-Api-Key": "{{ api_key }}"}'>
+<body hx-headers='{"X-Api-Key": {{ api_key | tojson }}}'>
 
   <header>
     <h1>&#x1F4E6; MrijaArchive Admin</h1>
-    <span class="db-path">&#x1F5C4; {{ db_path }}</span>
+    <span class="db-path">&#x1F5C4; {{ db_path | e }}</span>
     <button class="btn" hx-post="/api/restart" hx-swap="none">&#x21BA; Restart DB</button>
     <button class="btn danger" hx-post="/api/shutdown" hx-swap="none"
             onclick="return confirm('Shut down the server?')">&#x23F9; Shutdown</button>
@@ -193,7 +193,7 @@
     <div class="panel">
       <div class="panel-header">
         <span class="panel-title">Droplet</span>
-        <span class="panel-sub">{{ droplet_url }}</span>
+        <span class="panel-sub">{{ droplet_url | e }}</span>
         <select class="filter" id="droplet-client-filter"
                 hx-on:change="htmx.ajax('GET','/data/droplet-logs?client='+this.value,{target:'#droplet-tbody',swap:'innerHTML'})">
           <option value="">All clients</option>
@@ -242,8 +242,10 @@
     // Auto-scroll log tables on update
     document.body.addEventListener('htmx:afterSwap', function(e) {
       const id = e.detail.target.id;
-      if (id === 'local-tbody') document.getElementById('scroll-local').scrollIntoView();
-      if (id === 'droplet-tbody') document.getElementById('scroll-droplet').scrollIntoView();
+      if (id === 'local-tbody' || id === 'droplet-tbody') {
+        const wrap = e.detail.target.closest('.tbl-wrap');
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      }
     });
   </script>
 

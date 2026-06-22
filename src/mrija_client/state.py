@@ -31,8 +31,8 @@ class AppState:
     manifest_version: str = ""
     mode: str = "user"
     log_queue: queue.SimpleQueue = field(default_factory=queue.SimpleQueue)
-    logs: list = field(default_factory=list)
-    requests: list = field(default_factory=list)  # structured request log
+    logs: list[str] = field(default_factory=list)
+    requests: list[dict] = field(default_factory=list)
 
     def log(self, msg: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")

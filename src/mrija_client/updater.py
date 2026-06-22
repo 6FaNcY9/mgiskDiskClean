@@ -60,7 +60,7 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
     state.log(f"Update started — connecting to {UPDATE_SERVER}")
 
     try:
-        manifest = fetch_manifest()
+        manifest = fetch_manifest(manifest_url)
         version = manifest.get("version", "?")
         filename = manifest.get("filename") or Path(manifest["url"]).name
         size_mb = round(manifest.get("size", 0) / 1024 / 1024, 1)
