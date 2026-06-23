@@ -234,7 +234,7 @@ async def droplet_logs_fragment(client: str = ""):
         url = f"{droplet_url}/data/logs"
         if client:
             url += "?" + urlencode({"client": client})
-        req = urllib.request.Request(url, headers={"X-Api-Key": droplet_key})
+        req = urllib.request.Request(url, headers={"X-Api-Key": droplet_key, "User-Agent": "MrijaArchive/1.0"})
         with urllib.request.urlopen(req, timeout=3) as r:
             body = r.read().decode()
         return HTMLResponse(body)
