@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-UPDATE_SERVER = os.environ.get("MRIJA_UPDATE_SERVER", "http://104.248.242.243")
+UPDATE_SERVER = os.environ.get("MRIJA_UPDATE_SERVER", "https://archive.mrija.org")
 MANIFEST_PATH = "/updates/manifest.json"
 
 
