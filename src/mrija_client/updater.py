@@ -11,9 +11,13 @@ UPDATE_SERVER = os.environ.get("MRIJA_UPDATE_SERVER", "https://archive.mrija.org
 MANIFEST_PATH = "/updates/manifest.json"
 
 
+_UA = "MrijaArchive/1.0"
+
+
 def fetch_manifest(url: str | None = None) -> dict:
     target = url or (UPDATE_SERVER + MANIFEST_PATH)
-    with urllib.request.urlopen(target, timeout=10) as r:
+    req = urllib.request.Request(target, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read())
 
 
@@ -39,7 +43,8 @@ def download_archive(
     dest: Path,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> None:
-    with urllib.request.urlopen(url, timeout=60) as r:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=60) as r:
         total = int(r.headers.get("Content-Length", 0))
         downloaded = 0
         with open(dest, "wb") as f:
