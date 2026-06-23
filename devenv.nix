@@ -668,16 +668,14 @@
         echo "Usage: mrija-admin [path/to/archive.sqlite]"
         exit 1
       fi
-      # Fetch droplet API key via SSH so admin panel can proxy droplet logs
-      DROPLET_KEY=""
-      if SSH_AUTH_SOCK="" ssh -i "$HOME/.ssh/digitalOcean" -o ConnectTimeout=4 -o BatchMode=yes \
-           root@104.248.242.243 true 2>/dev/null; then
-        DROPLET_KEY=$(SSH_AUTH_SOCK="" ssh -i "$HOME/.ssh/digitalOcean" \
-          root@104.248.242.243 "grep MRIJA_API_KEY /opt/mrija/mrija.env | cut -d= -f2" 2>/dev/null || true)
-      fi
+      # Fetch droplet API key via SSH (port 8080 is closed; key needed for HTTPS proxy)
+      DROPLET_KEY=$(SSH_AUTH_SOCK="" ssh -i "$HOME/.ssh/digitalOcean" \
+        -o ConnectTimeout=4 -o BatchMode=yes \
+        root@104.248.242.243 \
+        "grep MRIJA_API_KEY /opt/mrija/mrija.env | cut -d= -f2" 2>/dev/null || true)
       if [ -n "$DROPLET_KEY" ]; then
         echo "  Droplet connected — logs will appear in admin panel"
-        export MRIJA_DROPLET_URL="http://104.248.242.243:8080"
+        export MRIJA_DROPLET_URL="https://archive.mrija.org"
         export MRIJA_DROPLET_KEY="$DROPLET_KEY"
       else
         echo "  Droplet unreachable — only local logs shown"
