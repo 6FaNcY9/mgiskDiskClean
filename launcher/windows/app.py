@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import sys
 import threading
 import time
@@ -15,6 +16,8 @@ _DATA    = _APPDATA / "MrijaArchive" / "data" / "client"
 _PORT    = int(os.environ.get("MRIJA_PORT", "8080"))
 _HOST    = "127.0.0.1"
 _URL     = f"http://{_HOST}:{_PORT}"
+_MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+_HEX = "0123456789abcdefABCDEF"
 
 # Development mode: add src/ to sys.path so mrija_client is importable without install
 if not getattr(sys, "frozen", False):
@@ -23,7 +26,44 @@ if not getattr(sys, "frozen", False):
         sys.path.insert(0, str(_src))
 
 
+def _client_db() -> Path:
+    return _DATA / "mail_archive.sqlite"
+
+
+def _bundle_roots() -> list[Path]:
+    if getattr(sys, "frozen", False):
+        return [Path(sys.executable).resolve().parent]
+    return [Path(__file__).resolve().parents[2]]
+
+
+def _bundled_db_candidates() -> list[Path]:
+    hits: list[Path] = []
+    for root in _bundle_roots():
+        hits.extend([
+            root / "data" / "client" / "mail_archive.sqlite",
+            root / "data" / "index" / "mail_index.sqlite",
+        ])
+    return [p for p in hits if p.exists()]
+
+
+def _install_bundled_db() -> None:
+    candidates = _bundled_db_candidates()
+    if not candidates:
+        return
+
+    source = candidates[0]
+    dest = _client_db()
+    if dest.exists() and dest.stat().st_mtime >= source.stat().st_mtime:
+        return
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    shutil.copy2(source, tmp)
+    tmp.replace(dest)
+
+
 def _find_db() -> Path | None:
+    _install_bundled_db()
     if not _DATA.exists():
         return None
     hits = sorted(_DATA.glob("*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -49,7 +89,7 @@ class _Api:
         self._win   = None
 
     def save_attachment(self, sha256: str, filename: str) -> dict:
-        if not all(c in "0123456789abcdefABCDEF" for c in sha256):
+        if len(sha256) != 64 or not all(c in _HEX for c in sha256):
             return {"error": "Invalid attachment ID."}
         url = f"{_URL}/data/attachment/{sha256}"
         req = urllib.request.Request(
@@ -58,7 +98,9 @@ class _Api:
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
+                data = resp.read(_MAX_ATTACHMENT_BYTES + 1)
+                if len(data) > _MAX_ATTACHMENT_BYTES:
+                    return {"error": "Attachment is too large to save."}
         except urllib.error.HTTPError as exc:
             if exc.code in (404, 403):
                 return {"error": "Attachment not available in this archive."}
@@ -105,8 +147,12 @@ class _Api:
                 pass
             if self._win:
                 self._win.load_url(_URL)
-        except Exception:
-            pass
+        except urllib.error.HTTPError as exc:
+            if self._win:
+                self._win.evaluate_js(f"alert({json.dumps(f'Could not open file (HTTP {exc.code})')})")
+        except Exception as exc:
+            if self._win:
+                self._win.evaluate_js(f"alert({json.dumps(f'Could not open file: {exc}')})")
 
 
 def main() -> None:

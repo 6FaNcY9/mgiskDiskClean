@@ -60,7 +60,9 @@ async def open_file(req: OpenRequest):
     from mrija_client.server import get_state
     from mrija_client.db import MailDB
     state = get_state()
-    path = Path(req.path)
+    path = Path(req.path).resolve()
+    if path.suffix.lower() not in {".sqlite", ".db"}:
+        raise HTTPException(400, "Only .sqlite / .db files may be opened")
     if not path.exists():
         raise HTTPException(404, f"File not found: {path}")
     if state.db:

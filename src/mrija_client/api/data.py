@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 router = APIRouter()
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _env = Environment(loader=FileSystemLoader(_TEMPLATES_DIR), autoescape=True)
+_rich_re = re.compile(r"\[/?[^\]]*\]")
 
 
 def _render(name: str, **ctx) -> HTMLResponse:
@@ -145,10 +146,10 @@ async def status_bar():
 @router.get("/update-check", response_class=HTMLResponse)
 async def update_check():
     from mrija_client.server import get_state
-    from mrija_client.updater import fetch_manifest
+    from mrija_client.updater import fetch_manifest, UPDATE_SERVER, MANIFEST_PATH
     state = get_state()
     try:
-        manifest = fetch_manifest()
+        manifest = fetch_manifest(UPDATE_SERVER + MANIFEST_PATH)
         remote_ver = manifest.get("version", "")
         if remote_ver and remote_ver == state.manifest_version:
             return HTMLResponse(
@@ -200,8 +201,7 @@ async def logs_fragment(client: str = "", limit: int = 100):
 async def applogs_fragment():
     from mrija_client.server import get_state
     state = get_state()
-    _rich = re.compile(r"\[/?[^\]]*\]")
-    lines = [_rich.sub("", ln) for ln in state.logs[-60:]]
+    lines = [_rich_re.sub("", ln) for ln in state.logs[-60:]]
     if not lines:
         return HTMLResponse('<div class="log-empty-msg">No entries yet.</div>')
     rows = []
@@ -228,7 +228,7 @@ async def droplet_logs_fragment(client: str = ""):
     droplet_url = os.environ.get("MRIJA_DROPLET_URL", "").rstrip("/")
     droplet_key = os.environ.get("MRIJA_DROPLET_KEY", "")
     if not droplet_url or not droplet_key:
-        return HTMLResponse('<tr><td colspan="6" class="log-empty">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</td></tr>')
+        return HTMLResponse('<tr><td colspan="7" class="log-empty">MRIJA_DROPLET_URL / MRIJA_DROPLET_KEY not set.</td></tr>')
     try:
         from urllib.parse import urlencode
         url = f"{droplet_url}/data/logs"
@@ -239,7 +239,7 @@ async def droplet_logs_fragment(client: str = ""):
             body = r.read().decode()
         return HTMLResponse(body)
     except Exception as exc:
-        return HTMLResponse(f'<tr><td colspan="6" class="log-empty">Droplet unreachable: {html.escape(str(exc))}</td></tr>')
+        return HTMLResponse(f'<tr><td colspan="7" class="log-empty">Droplet unreachable: {html.escape(str(exc))}</td></tr>')
 
 
 @router.get("/admin-panel", response_class=HTMLResponse)
@@ -261,9 +261,9 @@ async def download_attachment(sha256: str):
         raise HTTPException(404, "Attachment not found")
     if not state.db_path:
         raise HTTPException(503, "No database path")
-    data_dir = state.db_path.parent.parent
+    data_dir = state.db_path.parent.parent.resolve()
     file_path = (data_dir / att["stored_path"]).resolve()
-    if not str(file_path).startswith(str(data_dir.resolve())):
+    if not file_path.is_relative_to(data_dir):
         raise HTTPException(403, "Forbidden")
     if not file_path.exists():
         raise HTTPException(404, "File not found on disk")

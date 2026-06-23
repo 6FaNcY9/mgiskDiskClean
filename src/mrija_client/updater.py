@@ -2,11 +2,12 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import urllib.request
 from pathlib import Path
 from typing import Callable
 
-UPDATE_SERVER = "http://104.248.242.243"
+UPDATE_SERVER = os.environ.get("MRIJA_UPDATE_SERVER", "http://104.248.242.243")
 MANIFEST_PATH = "/updates/manifest.json"
 
 
@@ -106,6 +107,7 @@ def run_update(state: "AppState", dest_dir: Path) -> None:  # type: ignore[name-
 
         state.update_progress = 100
         state.state = ClientState.RUNNING
+        state.error_message = ""
 
         try:
             s = state.db.stats()
