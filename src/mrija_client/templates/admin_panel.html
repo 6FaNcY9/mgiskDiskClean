@@ -3,6 +3,13 @@
     <span class="admin-title">Admin</span>
     <span class="admin-db">{{ db_info }}</span>
     <div class="admin-controls">
+      {% if sync_configured %}
+      <button class="admin-btn" id="sync-btn-panel"
+              hx-post="/api/sync"
+              hx-swap="none"
+              hx-disabled-elt="this"
+              hx-on::after-request="this.textContent='↻ Sync'; this.removeAttribute('disabled')">&#x21BB; Sync</button>
+      {% endif %}
       <button class="admin-btn"
               hx-post="/api/restart"
               hx-swap="none">Restart DB</button>

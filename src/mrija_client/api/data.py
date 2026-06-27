@@ -244,10 +244,13 @@ async def droplet_logs_fragment(client: str = ""):
 
 @router.get("/admin-panel", response_class=HTMLResponse)
 async def admin_panel_fragment():
+    import os as _os
     from mrija_client.server import get_state
     state = get_state()
     db_info = str(state.db_path) if state.db_path else "no database"
-    return _render("admin_panel.html", db_info=db_info)
+    return _render("admin_panel.html",
+                   db_info=db_info,
+                   sync_configured=bool(_os.environ.get("MRIJA_SYNC_REMOTE")))
 
 
 @router.get("/attachment/{sha256}")

@@ -108,6 +108,86 @@ async def shutdown():
     return {"state": "stopped"}
 
 
+def _run_sync_impl(state) -> None:
+    import subprocess
+    from pathlib import Path
+    from mrija_client.db import MailDB
+    from mrija_client.state import ClientState as _CS
+
+    remote = os.environ.get("MRIJA_SYNC_REMOTE", "")
+    remote_path = os.environ.get("MRIJA_SYNC_REMOTE_PATH", "Maildir/")
+    maildir = os.environ.get("MRIJA_MAILDIR", "/maildir")
+    ssh_key = os.environ.get("MRIJA_SSH_KEY", "/run/secrets/thehost_sshkey")
+    db_path = Path(os.environ.get("MRIJA_DB", "/data/mail_index.sqlite"))
+
+    if not remote:
+        state.log("Sync: MRIJA_SYNC_REMOTE not configured")
+        return
+
+    if state.state == _CS.UPDATING:
+        state.log("Sync: already in progress, skipping")
+        return
+
+    state.state = _CS.UPDATING
+    state.update_progress = 5
+    state.update_status = f"Syncing maildir from {remote}…"
+    state.log(f"Sync: rsync {remote}:{remote_path} → {maildir}")
+
+    try:
+        r = subprocess.run(
+            ["rsync", "-az", "--delete",
+             "-e", f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+             f"{remote}:{remote_path}", f"{maildir}/"],
+            capture_output=True, text=True, timeout=600,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"rsync: {r.stderr.strip()[:300]}")
+
+        state.update_progress = 55
+        state.update_status = "Reindexing maildir…"
+        state.log("Sync: rsync OK, reindexing…")
+
+        r = subprocess.run(
+            ["python", "-m", "maildir_report.index_mailbox",
+             "--maildir", maildir, "--db", str(db_path)],
+            capture_output=True, text=True, timeout=600, cwd="/app",
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"reindex: {r.stderr.strip()[:300]}")
+
+        state.update_progress = 92
+        state.update_status = "Reloading database…"
+        if state.db:
+            state.db.close()
+        state.db = MailDB(db_path)
+        state.db_path = db_path
+        state.state = _CS.RUNNING
+        stats = state.db.stats()
+        msg = f"Sync complete — {stats['email_count']:,} emails"
+        state.update_status = msg
+        state.update_progress = 100
+        state.last_sync_at = time.strftime("%Y-%m-%d %H:%M")
+        state.last_sync_ok = True
+        state.log(msg)
+    except Exception as exc:
+        state.state = _CS.RUNNING if state.db else _CS.ERROR
+        state.update_status = f"Sync failed: {exc}"
+        state.last_sync_at = time.strftime("%Y-%m-%d %H:%M")
+        state.last_sync_ok = False
+        state.log(f"Sync failed: {exc}")
+
+
+@router.post("/sync", dependencies=[Depends(_check_key)])
+async def trigger_sync():
+    _rate_limit("sync")
+    from mrija_client.server import get_state
+    state = get_state()
+    if state.state == ClientState.UPDATING:
+        raise HTTPException(409, "Sync already in progress")
+    threading.Thread(target=_run_sync_impl, args=(state,), daemon=True).start()
+    return {"status": "started"}
+
+
 @router.post("/update", dependencies=[Depends(_check_key)])
 async def trigger_update():
     _rate_limit("update")

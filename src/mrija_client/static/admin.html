@@ -133,7 +133,7 @@
     .log-line { color: #475569; padding: .1rem 0; border-bottom: 1px solid #0a0f1a; white-space: pre-wrap; word-break: break-all; }
     .log-line.fresh { color: #a5b4fc; }
     .log-empty-msg { color: #1e293b; padding: 1rem; }
-    #scroll-local, #scroll-droplet { height: 1px; }
+    #scroll-local { height: 1px; }
   </style>
 </head>
 <body hx-headers='{"X-Api-Key": {{ api_key | tojson }}}'>
@@ -141,9 +141,21 @@
   <header>
     <h1>&#x1F4E6; MrijaArchive Admin</h1>
     <span class="db-path">&#x1F5C4; {{ db_path | e }}</span>
+    {% if last_sync_at %}
+    <span class="db-path" style="color: {% if last_sync_ok %}#6ee7b7{% else %}#fca5a5{% endif %}">
+      &#x21BB; {{ last_sync_at }}{% if not last_sync_ok %} (failed){% endif %}
+    </span>
+    {% endif %}
+    {% if sync_configured %}
+    <button class="btn" id="sync-btn"
+            hx-post="/api/sync" hx-swap="none"
+            hx-disabled-elt="this"
+            hx-on::after-request="this.textContent='↻ Sync Now'; this.removeAttribute('disabled')">&#x21BB; Sync Now</button>
+    {% endif %}
     <button class="btn" hx-post="/api/restart" hx-swap="none">&#x21BA; Restart DB</button>
     <button class="btn danger" hx-post="/api/shutdown" hx-swap="none"
             onclick="return confirm('Shut down the server?')">&#x23F9; Shutdown</button>
+    <a class="btn" href="/logout" style="text-decoration:none">&#x2192; Logout</a>
   </header>
 
   <div id="status-strip"
@@ -188,40 +200,6 @@
       </div>
     </div>
 
-    {% if has_droplet %}
-    <!-- Droplet requests -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">Droplet</span>
-        <span class="panel-sub">{{ droplet_url | e }}</span>
-        <select class="filter" id="droplet-client-filter"
-                hx-on:change="htmx.ajax('GET','/data/droplet-logs?client='+this.value,{target:'#droplet-tbody',swap:'innerHTML'})">
-          <option value="">All clients</option>
-          <option value="windows-app">windows-app</option>
-          <option value="browser">browser</option>
-          <option value="updater">updater</option>
-          <option value="other">other</option>
-        </select>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th><th>IP</th><th>Method</th><th>Path</th>
-              <th>Status</th><th>ms</th><th>Client</th>
-            </tr>
-          </thead>
-          <tbody id="droplet-tbody"
-                 hx-get="/data/droplet-logs"
-                 hx-trigger="load, every 5s"
-                 hx-swap="innerHTML">
-            <tr><td colspan="7" class="log-empty">Loading…</td></tr>
-          </tbody>
-        </table>
-        <div id="scroll-droplet"></div>
-      </div>
-    </div>
-    {% endif %}
 
     <!-- App messages (non-HTTP) -->
     <div class="panel" style="max-width:320px; flex-shrink:0;">
@@ -239,12 +217,18 @@
   </div>
 
   <script>
-    // Auto-scroll log tables on update
     document.body.addEventListener('htmx:afterSwap', function(e) {
       const id = e.detail.target.id;
       if (id === 'local-tbody' || id === 'droplet-tbody') {
         const wrap = e.detail.target.closest('.tbl-wrap');
         if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      }
+      if (id === 'status-strip') {
+        const btn = document.getElementById('sync-btn');
+        if (btn && !e.detail.target.textContent.toLowerCase().includes('updating')) {
+          btn.textContent = '↻ Sync Now';
+          btn.removeAttribute('disabled');
+        }
       }
     });
   </script>

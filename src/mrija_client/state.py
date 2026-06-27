@@ -30,6 +30,8 @@ class AppState:
     version: str = ""
     manifest_version: str = ""
     mode: str = "user"
+    last_sync_at: str = ""
+    last_sync_ok: bool | None = None
     log_queue: queue.SimpleQueue = field(default_factory=queue.SimpleQueue)
     logs: list[str] = field(default_factory=list)
     requests: list[dict] = field(default_factory=list)
