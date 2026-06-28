@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Template
 from mrija_client.state import AppState
@@ -29,6 +29,12 @@ def _request_ip(request: Request) -> str:
 
 def _request_ua(request: Request) -> str:
     return request.headers.get("user-agent", "")
+
+
+def _login_redirect(request: Request) -> Response:
+    if request.headers.get("hx-request", "").lower() == "true":
+        return Response(status_code=204, headers={"HX-Redirect": "/login"})
+    return RedirectResponse("/login", status_code=303)
 
 
 def get_state() -> AppState:
@@ -82,7 +88,7 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
                     method=request.method,
                     path=path,
                 )
-            return RedirectResponse("/login", status_code=303)
+            return _login_redirect(request)
         state.touch_session(sid, ip=_request_ip(request), ua=_request_ua(request))
         return await call_next(request)
 

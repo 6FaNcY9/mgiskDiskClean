@@ -37,6 +37,19 @@ def test_admin_audit_tracks_login_session_and_logout(monkeypatch):
     assert state.sessions == {}
 
 
+def test_unauthenticated_htmx_fragment_redirects_whole_page(monkeypatch):
+    monkeypatch.setenv("MRIJA_PASSWORD", "secret")
+    state = AppState(state=ClientState.RUNNING)
+    client = TestClient(create_app(state, mode="admin"))
+
+    r = client.get("/data/audit/metrics", headers={"HX-Request": "true"})
+
+    assert r.status_code == 204
+    assert r.headers["HX-Redirect"] == "/login"
+    assert "MrijaArchive" not in r.text
+    assert state.audit_events[-1]["event"] == "auth_required"
+
+
 def test_audit_fragments_are_admin_mode_only(monkeypatch):
     monkeypatch.setenv("MRIJA_PASSWORD", "secret")
     state = AppState(state=ClientState.RUNNING)
