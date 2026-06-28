@@ -52,6 +52,8 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
     global _app_state
     _app_state = state
     state.mode = mode
+    state.load_audit_file()
+    state.log_audit("server_started", f"Server started in {mode} mode")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):

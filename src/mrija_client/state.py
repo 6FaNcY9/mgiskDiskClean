@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from mrija_client.db import MailDB
 
+_AUDIT_LIMIT = 1000
+
 
 class ClientState(str, Enum):
     NO_DATA  = "no_data"
@@ -79,9 +81,32 @@ class AppState:
             "details": details,
         }
         self.audit_events.append(entry)
-        if len(self.audit_events) > 1000:
+        if len(self.audit_events) > _AUDIT_LIMIT:
             self.audit_events.pop(0)
         self._append_audit_file(entry)
+
+    def load_audit_file(self) -> None:
+        audit_path = os.environ.get("MRIJA_AUDIT_LOG", "")
+        if not audit_path:
+            return
+        path = Path(audit_path)
+        if not path.exists():
+            return
+        entries: list[dict] = []
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(entry, dict) and entry.get("event") and entry.get("message"):
+                    entries.append(entry)
+            self.audit_events = entries[-_AUDIT_LIMIT:]
+            self.log(f"Audit: loaded {len(self.audit_events)} events from {path}")
+        except OSError as exc:
+            self.log(f"Audit file read failed: {exc}")
 
     def start_session(self, sid: str, *, ip: str = "", ua: str = "") -> None:
         now = datetime.now().isoformat(timespec="seconds")

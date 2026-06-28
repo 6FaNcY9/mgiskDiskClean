@@ -45,3 +45,24 @@ def test_audit_fragments_are_admin_mode_only(monkeypatch):
 
     r = client.get("/data/audit/events")
     assert r.status_code == 404
+
+
+def test_audit_events_load_from_persistent_file(monkeypatch, tmp_path):
+    audit_path = tmp_path / "audit" / "events.jsonl"
+    audit_path.parent.mkdir()
+    audit_path.write_text(
+        '{"ts":"10:00:00","at":"2026-06-29T10:00:00",'
+        '"event":"login_success","message":"Old login",'
+        '"ip":"127.0.0.1","client":"browser","user_agent":"",'
+        '"session":"abc","details":{}}\n'
+        "not json\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MRIJA_AUDIT_LOG", str(audit_path))
+
+    state = AppState(state=ClientState.RUNNING)
+    create_app(state, mode="admin")
+
+    assert any(e["message"] == "Old login" for e in state.audit_events)
+    assert state.audit_events[-1]["event"] == "server_started"
+    assert "server_started" in audit_path.read_text(encoding="utf-8")

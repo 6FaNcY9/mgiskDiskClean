@@ -1,5 +1,6 @@
 from __future__ import annotations
 import html
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -224,6 +225,7 @@ async def audit_metrics_fragment():
         ("Requests", len(requests), "In-memory request rows"),
         ("HTTP errors", error_count, "Status 400 and above"),
         ("Avg latency", f"{avg_ms}ms", "Last 100 requests"),
+        ("Audit file", "On" if os.environ.get("MRIJA_AUDIT_LOG") else "Off", "Persistent server events"),
     ]
     return _render("audit_metrics.html", cards=cards)
 
