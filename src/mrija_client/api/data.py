@@ -1,6 +1,7 @@
 from __future__ import annotations
 import html
 import re
+from collections import Counter
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -14,6 +15,15 @@ _rich_re = re.compile(r"\[/?[^\]]*\]")
 
 def _render(name: str, **ctx) -> HTMLResponse:
     return HTMLResponse(_env.get_template(name).render(**ctx))
+
+
+def _badge_class(value: int) -> str:
+    return "s2" if value < 300 else ("s4" if value >= 400 else "s3")
+
+
+def _require_admin_mode(state) -> None:
+    if state.mode != "admin":
+        raise HTTPException(404, "Not found")
 
 
 @router.get("/search", response_class=HTMLResponse)
@@ -182,7 +192,7 @@ async def logs_fragment(client: str = "", limit: int = 100):
     rows = []
     for e in reversed(entries):
         s = e["status"]
-        scls = "s2" if s < 300 else ("s4" if s >= 400 else "s3")
+        scls = _badge_class(s)
         rows.append(
             f'<tr class="req-row">'
             f'<td class="col-ts">{html.escape(e["ts"])}</td>'
@@ -191,10 +201,54 @@ async def logs_fragment(client: str = "", limit: int = 100):
             f'<td class="col-path" title="{html.escape(e["path"])}">{html.escape(e["path"])}</td>'
             f'<td class="col-status {scls}">{s}</td>'
             f'<td class="col-ms">{e["ms"]}ms</td>'
-            f'<td class="col-client {e["client"]}">{html.escape(e["client"])}</td>'
+            f'<td class="col-client {e["client"]}" title="{html.escape(e.get("user_agent", ""))}">{html.escape(e["client"])}</td>'
             f'</tr>'
         )
     return HTMLResponse("".join(rows))
+
+
+@router.get("/audit/metrics", response_class=HTMLResponse)
+async def audit_metrics_fragment():
+    from mrija_client.server import get_state
+    state = get_state()
+    _require_admin_mode(state)
+    events = list(state.audit_events)
+    requests = list(state.requests)
+    event_counts = Counter(e["event"] for e in events)
+    error_count = sum(1 for r in requests if int(r.get("status", 0)) >= 400)
+    avg_ms = int(sum(int(r.get("ms", 0)) for r in requests[-100:]) / max(1, min(len(requests), 100)))
+    cards = [
+        ("Active sessions", len(state.sessions), "Live browser sessions"),
+        ("Login OK", event_counts.get("login_success", 0), "Successful admin logins"),
+        ("Login failed", event_counts.get("login_failed", 0), "Rejected password attempts"),
+        ("Requests", len(requests), "In-memory request rows"),
+        ("HTTP errors", error_count, "Status 400 and above"),
+        ("Avg latency", f"{avg_ms}ms", "Last 100 requests"),
+    ]
+    return _render("audit_metrics.html", cards=cards)
+
+
+@router.get("/audit/sessions", response_class=HTMLResponse)
+async def audit_sessions_fragment():
+    from mrija_client.server import get_state
+    state = get_state()
+    _require_admin_mode(state)
+    sessions = sorted(
+        state.sessions.values(),
+        key=lambda s: str(s.get("last_seen_at", "")),
+        reverse=True,
+    )
+    return _render("audit_sessions.html", sessions=sessions)
+
+
+@router.get("/audit/events", response_class=HTMLResponse)
+async def audit_events_fragment(limit: int = 100):
+    limit = min(max(limit, 1), 300)
+    from mrija_client.server import get_state
+    state = get_state()
+    _require_admin_mode(state)
+    events = list(reversed(state.audit_events[-limit:]))
+    return _render("audit_events.html", events=events)
 
 
 @router.get("/applogs", response_class=HTMLResponse)

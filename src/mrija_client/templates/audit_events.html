@@ -1,0 +1,14 @@
+{% if events %}
+{% for e in events %}
+<tr class="req-row">
+  <td class="col-ts">{{ e.ts }}</td>
+  <td class="col-ip">{{ e.ip or "-" }}</td>
+  <td class="col-method">{{ e.event }}</td>
+  <td class="col-path" title="{{ e.user_agent }}">{{ e.message }}</td>
+  <td class="col-client {{ e.client }}">{{ e.client }}</td>
+  <td class="col-ms">{{ e.session or "-" }}</td>
+</tr>
+{% endfor %}
+{% else %}
+<tr><td colspan="6" class="log-empty">No audit events yet.</td></tr>
+{% endif %}

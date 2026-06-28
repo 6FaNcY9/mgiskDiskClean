@@ -17,7 +17,18 @@ _app_state: AppState | None = None
 _SESSIONS: set[str] = set()
 
 _PUBLIC_PATHS = {"/login"}
-_PUBLIC_PREFIXES = ("/static/", "/api/", "/data/")
+_PUBLIC_PREFIXES = ("/static/", "/api/")
+
+
+def _request_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return getattr(request.client, "host", "?")
+
+
+def _request_ua(request: Request) -> str:
+    return request.headers.get("user-agent", "")
 
 
 def get_state() -> AppState:
@@ -60,7 +71,17 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
             return await call_next(request)
         sid = request.cookies.get("mrija_sid")
         if not sid or sid not in _SESSIONS:
+            if path != "/login":
+                state.log_audit(
+                    "auth_required",
+                    f"Redirected unauthenticated request to {path}",
+                    ip=_request_ip(request),
+                    ua=_request_ua(request),
+                    method=request.method,
+                    path=path,
+                )
             return RedirectResponse("/login", status_code=303)
+        state.touch_session(sid, ip=_request_ip(request), ua=_request_ua(request))
         return await call_next(request)
 
     @app.middleware("http")
@@ -70,9 +91,8 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
         ms = int((time.monotonic() - t0) * 1000)
         path = request.url.path
         if not path.startswith("/static") and path != "/api/update/progress":
-            ip = (request.headers.get("x-forwarded-for") or
-                  getattr(request.client, "host", "?"))
-            ua = request.headers.get("user-agent", "")
+            ip = _request_ip(request)
+            ua = _request_ua(request)
             state.log(f"{request.method} {path} → {response.status_code} ({ms}ms) [{ip}]")
             state.log_request(ip, request.method, path, response.status_code, ms, ua)
         return response
@@ -102,15 +122,38 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
         if expected and _secrets.compare_digest(password.encode(), expected.encode()):
             sid = _secrets.token_hex(32)
             _SESSIONS.add(sid)
+            state.start_session(sid, ip=_request_ip(request), ua=_request_ua(request))
+            state.log_audit(
+                "login_success",
+                "Admin login succeeded",
+                ip=_request_ip(request),
+                ua=_request_ua(request),
+                session=sid,
+            )
             resp = RedirectResponse("/", status_code=303)
             resp.set_cookie("mrija_sid", sid, httponly=True, samesite="strict", max_age=86400 * 7)
             return resp
+        state.log_audit(
+            "login_failed",
+            "Admin login failed",
+            ip=_request_ip(request),
+            ua=_request_ua(request),
+        )
         return RedirectResponse("/login?error=1", status_code=303)
 
     @app.get("/logout")
     async def logout(request: Request):
         sid = request.cookies.get("mrija_sid")
         _SESSIONS.discard(sid)
+        session = state.end_session(sid)
+        state.log_audit(
+            "logout",
+            "Admin logged out",
+            ip=_request_ip(request),
+            ua=_request_ua(request),
+            session=sid or "",
+            session_requests=session.get("requests", 0) if session else 0,
+        )
         resp = RedirectResponse("/login", status_code=303)
         resp.delete_cookie("mrija_sid")
         return resp

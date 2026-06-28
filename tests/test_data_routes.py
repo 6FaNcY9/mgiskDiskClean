@@ -6,6 +6,11 @@ from mrija_client.db import MailDB
 from mrija_client.server import create_app
 
 
+@pytest.fixture(autouse=True)
+def set_password(monkeypatch):
+    monkeypatch.setenv("MRIJA_PASSWORD", "secret")
+
+
 @pytest.fixture
 def client(tmp_path):
     db_path = tmp_path / "test.sqlite"
@@ -35,7 +40,9 @@ def client(tmp_path):
     """)
     con.close()
     state = AppState(state=ClientState.RUNNING, db=MailDB(db_path), db_path=db_path)
-    return TestClient(create_app(state))
+    client = TestClient(create_app(state))
+    client.post("/login", data={"password": "secret"})
+    return client
 
 
 def test_search_returns_html(client):

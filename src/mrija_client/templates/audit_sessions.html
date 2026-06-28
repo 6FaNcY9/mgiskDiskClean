@@ -1,0 +1,14 @@
+{% if sessions %}
+{% for s in sessions %}
+<tr class="req-row">
+  <td class="col-ts">{{ s.last_seen_at }}</td>
+  <td class="col-ip">{{ s.ip }}</td>
+  <td class="col-path" title="{{ s.user_agent }}">{{ s.id }}</td>
+  <td class="col-client {{ s.client }}">{{ s.client }}</td>
+  <td class="col-ms">{{ s.requests }}</td>
+  <td class="col-path">{{ s.created_at }}</td>
+</tr>
+{% endfor %}
+{% else %}
+<tr><td colspan="6" class="log-empty">No active sessions.</td></tr>
+{% endif %}

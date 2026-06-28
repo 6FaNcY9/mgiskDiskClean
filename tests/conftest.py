@@ -13,6 +13,7 @@ class _CompatTestClient:
     def __init__(self, app, base_url: str = "http://testserver", **_: object) -> None:
         self.app = app
         self.base_url = base_url
+        self.cookies = httpx.Cookies()
 
     def request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
         async def _request() -> httpx.Response:
@@ -20,8 +21,11 @@ class _CompatTestClient:
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url=self.base_url,
+                cookies=self.cookies,
             ) as client:
-                return await client.request(method, url, **kwargs)
+                response = await client.request(method, url, **kwargs)
+                self.cookies.update(response.cookies)
+                return response
 
         return anyio.run(_request)
 

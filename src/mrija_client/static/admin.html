@@ -52,6 +52,69 @@
       min-height: 30px;
     }
 
+    #dashboard {
+      background: #0b1120;
+      border-bottom: 1px solid #1e293b;
+      display: grid;
+      gap: .6rem;
+      padding: .65rem 1rem;
+      flex-shrink: 0;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: .5rem;
+    }
+    .metric {
+      background: #101827;
+      border: 1px solid #243044;
+      border-radius: 6px;
+      padding: .55rem .65rem;
+      min-width: 0;
+    }
+    .metric span {
+      color: #7dd3fc;
+      display: block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      overflow: hidden;
+      text-transform: uppercase;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .metric strong {
+      color: #e2e8f0;
+      display: block;
+      font-size: 18px;
+      line-height: 1.2;
+      margin-top: .25rem;
+    }
+    .metric small {
+      color: #64748b;
+      display: block;
+      margin-top: .15rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .audit-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, .9fr) minmax(460px, 1.4fr);
+      gap: .6rem;
+      min-height: 170px;
+      max-height: 28vh;
+    }
+    .audit-box {
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .audit-box .tbl-wrap { min-height: 0; }
+
     /* ── Log panels ── */
     #panels {
       display: flex;
@@ -134,6 +197,14 @@
     .log-line.fresh { color: #a5b4fc; }
     .log-empty-msg { color: #1e293b; padding: 1rem; }
     #scroll-local { height: 1px; }
+
+    @media (max-width: 960px) {
+      body { overflow: auto; height: auto; min-height: 100vh; }
+      .metrics { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+      .audit-grid, #panels { display: block; max-height: none; }
+      .audit-box, .panel { min-height: 260px; border-bottom: 1px solid #1e293b; }
+      .panel { max-width: none !important; }
+    }
   </style>
 </head>
 <body hx-headers='{"X-Api-Key": {{ api_key | tojson }}}'>
@@ -164,6 +235,59 @@
        hx-swap="innerHTML">
     <span style="color:#334155">loading…</span>
   </div>
+
+  <section id="dashboard">
+    <div class="metrics"
+         hx-get="/data/audit/metrics"
+         hx-trigger="load, every 2s"
+         hx-swap="innerHTML">
+      <div class="metric"><span>Loading</span><strong>...</strong><small>server audit</small></div>
+    </div>
+
+    <div class="audit-grid">
+      <div class="audit-box">
+        <div class="panel-header">
+          <span class="panel-title">Active sessions</span>
+          <span class="panel-sub">who is logged in now</span>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Last seen</th><th>IP</th><th>Session</th><th>Client</th><th>Req</th><th>Created</th>
+              </tr>
+            </thead>
+            <tbody hx-get="/data/audit/sessions"
+                   hx-trigger="load, every 2s"
+                   hx-swap="innerHTML">
+              <tr><td colspan="6" class="log-empty">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="audit-box">
+        <div class="panel-header">
+          <span class="panel-title">Audit activity</span>
+          <span class="panel-sub">login, logout, sync, restart, shutdown</span>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th><th>IP</th><th>Event</th><th>Message</th><th>Client</th><th>Session</th>
+              </tr>
+            </thead>
+            <tbody hx-get="/data/audit/events"
+                   hx-trigger="load, every 2s"
+                   hx-swap="innerHTML">
+              <tr><td colspan="6" class="log-empty">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div id="panels">
 
