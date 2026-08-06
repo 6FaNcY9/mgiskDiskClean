@@ -10,20 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mrija_client.state import ClientState
-
 router = APIRouter()
-
 _rate_lock = threading.Lock()
 _last_call: dict[str, float] = {}
 _RATE_LIMIT_SEC = 10  # destructive endpoints: one call per 10 s
-
-
 async def _check_key(x_api_key: str = Header(default="")) -> None:
     expected = os.environ.get("MRIJA_API_KEY", "dev-key")
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
-
-
 def _rate_limit(endpoint: str) -> None:
     with _rate_lock:
         last = _last_call.get(endpoint, 0.0)
@@ -34,12 +28,8 @@ def _rate_limit(endpoint: str) -> None:
                 detail=f"Rate limited: wait {_RATE_LIMIT_SEC - int(now - last)}s",
             )
         _last_call[endpoint] = now
-
-
 class OpenRequest(BaseModel):
     path: str
-
-
 @router.get("/status", dependencies=[Depends(_check_key)])
 async def status():
     from mrija_client.server import get_state
@@ -53,8 +43,6 @@ async def status():
         "db_path": str(state.db_path) if state.db_path else None,
         "version": state.version,
     }
-
-
 @router.post("/open", dependencies=[Depends(_check_key)])
 async def open_file(req: OpenRequest):
     from mrija_client.server import get_state
@@ -71,8 +59,6 @@ async def open_file(req: OpenRequest):
     state.db_path = path
     state.state = ClientState.RUNNING
     return {"state": state.state.value, "db_path": str(path)}
-
-
 @router.post("/restart", dependencies=[Depends(_check_key)])
 async def restart():
     _rate_limit("restart")
@@ -88,26 +74,100 @@ async def restart():
     else:
         state.state = ClientState.NO_DATA
     return {"state": state.state.value}
-
-
 @router.post("/shutdown", dependencies=[Depends(_check_key)])
 async def shutdown():
     _rate_limit("shutdown")
     from mrija_client.server import get_state
     state = get_state()
     state.state = ClientState.STOPPED
-
     def _stop() -> None:
         import time
         import os as _os
         import signal
         time.sleep(0.2)
         _os.kill(_os.getpid(), signal.SIGTERM)
-
     threading.Thread(target=_stop, daemon=True).start()
     return {"state": "stopped"}
-
-
+@router.post("/sync", dependencies=[Depends(_check_key)])
+async def trigger_sync():
+    _rate_limit("sync")
+    from mrija_client.server import get_state
+    state = get_state()
+    if state.state == ClientState.UPDATING:
+        raise HTTPException(409, "Sync already in progress")
+    def _run_sync() -> None:
+        import subprocess
+        from pathlib import Path
+        from mrija_client.db import MailDB
+        remote = os.environ.get("MRIJA_SYNC_REMOTE", "")
+        remote_path = os.environ.get("MRIJA_SYNC_REMOTE_PATH", "Maildir/")
+        maildir = os.environ.get("MRIJA_MAILDIR", "/maildir")
+        ssh_key = os.environ.get("MRIJA_SSH_KEY", "/run/secrets/thehost_sshkey")
+        db_path = Path(os.environ.get("MRIJA_DB", "/data/mail_index.sqlite"))
+        if not remote:
+            state.log("Sync: MRIJA_SYNC_REMOTE not configured")
+            return
+        state.state = ClientState.UPDATING
+        state.update_progress = 5
+        state.update_status = f"Syncing maildir from {remote}…"
+        state.log(f"Sync: rsync {remote}:{remote_path} → {maildir}")
+        try:
+            r = subprocess.run(
+                ["rsync", "-az", "--delete",
+                 "-e", f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+                 f"{remote}:{remote_path}", f"{maildir}/"],
+                capture_output=True, text=True, timeout=600,
+            )
+            if r.returncode != 0:
+                raise RuntimeError(f"rsync: {r.stderr.strip()[:300]}")
+            state.update_progress = 55
+            state.update_status = "Reindexing maildir…"
+            state.log("Sync: rsync OK, reindexing…")
+            # The v3 indexer works per mailbox and expects the layout
+            # <data_root>/maildir/.maildir/.  The rsync target holds
+            # <maildir>/<mailbox>/.maildir, so give each mailbox a data-root
+            # under /data/mailboxes with a "maildir" symlink to the real dir.
+            data_root_base = Path("/data/mailboxes")
+            data_root_base.mkdir(parents=True, exist_ok=True)
+            for mbox_dir in sorted(Path(maildir).iterdir()):
+                if not mbox_dir.is_dir() or mbox_dir.name.startswith("."):
+                    continue
+                if not (mbox_dir / ".maildir").exists():
+                    continue
+                root = data_root_base / mbox_dir.name
+                root.mkdir(parents=True, exist_ok=True)
+                link = root / "maildir"
+                if not link.exists():
+                    link.symlink_to(mbox_dir)
+                state.log(f"Sync: indexing {mbox_dir.name}…")
+                r = subprocess.run(
+                    ["python", "-m", "maildir_report.index_mailbox",
+                     "--mailbox", mbox_dir.name,
+                     "--data-root", str(root),
+                     "--global-index", str(db_path),
+                     "--quiet"],
+                    capture_output=True, text=True, timeout=600, cwd="/app",
+                )
+                if r.returncode != 0:
+                    raise RuntimeError(f"reindex {mbox_dir.name}: {r.stderr.strip()[:300]}")
+            state.update_progress = 92
+            state.update_status = "Reloading database…"
+            if state.db:
+                state.db.close()
+            state.db = MailDB(db_path)
+            state.db_path = db_path
+            state.state = ClientState.RUNNING
+            stats = state.db.stats()
+            msg = f"Sync complete — {stats['email_count']:,} emails"
+            state.update_status = msg
+            state.update_progress = 100
+            state.log(msg)
+        except Exception as exc:
+            state.state = ClientState.RUNNING if state.db else ClientState.ERROR
+            state.update_status = f"Sync failed: {exc}"
+            state.log(f"Sync failed: {exc}")
+    threading.Thread(target=_run_sync, daemon=True).start()
+    return {"status": "started"}
 @router.post("/update", dependencies=[Depends(_check_key)])
 async def trigger_update():
     _rate_limit("update")
@@ -119,13 +179,10 @@ async def trigger_update():
     dest_dir = state.db_path.parent if state.db_path else Path(tempfile.mkdtemp())
     threading.Thread(target=run_update, args=(state, dest_dir), daemon=True).start()
     return {"status": "started"}
-
-
 @router.get("/update/progress", dependencies=[Depends(_check_key)])
 async def update_progress():
     from mrija_client.server import get_state
     state = get_state()
-
     async def _generate():
         while state.state == ClientState.UPDATING:
             payload = json.dumps({
@@ -136,5 +193,4 @@ async def update_progress():
             await asyncio.sleep(0.5)
         payload = json.dumps({"percent": 100, "status": state.update_status})
         yield f"data: {payload}\n\n"
-
     return StreamingResponse(_generate(), media_type="text/event-stream")

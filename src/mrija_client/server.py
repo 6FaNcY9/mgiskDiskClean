@@ -1,10 +1,11 @@
 from __future__ import annotations
 import os
+import secrets as _secrets
 import time
 from pathlib import Path
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
 from jinja2 import Template
 from mrija_client.state import AppState
 
@@ -12,6 +13,10 @@ _HERE = Path(__file__).parent
 STATIC_DIR = _HERE / "static"
 
 _app_state: AppState | None = None
+_SESSIONS: set[str] = set()
+
+_PUBLIC_PATHS = {"/login"}
+_PUBLIC_PREFIXES = ("/static/", "/api/", "/data/")
 
 
 def get_state() -> AppState:
@@ -28,6 +33,16 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.middleware("http")
+    async def _auth(request: Request, call_next):
+        path = request.url.path
+        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return await call_next(request)
+        sid = request.cookies.get("mrija_sid")
+        if not sid or sid not in _SESSIONS:
+            return RedirectResponse("/login", status_code=303)
+        return await call_next(request)
+
+    @app.middleware("http")
     async def _log_requests(request: Request, call_next):
         t0 = time.monotonic()
         response = await call_next(request)
@@ -41,7 +56,6 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
             state.log_request(ip, request.method, path, response.status_code, ms, ua)
         return response
 
-    # Routers imported lazily — they don't exist until Tasks 6 and 7
     try:
         from mrija_client.api.data import router as data_router
         app.include_router(data_router, prefix="/data")
@@ -53,6 +67,32 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
         app.include_router(control_router, prefix="/api")
     except ImportError:
         pass
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_get(error: str = ""):
+        tpl = Template((STATIC_DIR / "login.html").read_text(encoding="utf-8"))
+        return tpl.render(error=bool(error))
+
+    @app.post("/login")
+    async def login_post(request: Request):
+        form = await request.form()
+        password = str(form.get("password", ""))
+        expected = os.environ.get("MRIJA_PASSWORD", "")
+        if expected and _secrets.compare_digest(password.encode(), expected.encode()):
+            sid = _secrets.token_hex(32)
+            _SESSIONS.add(sid)
+            resp = RedirectResponse("/", status_code=303)
+            resp.set_cookie("mrija_sid", sid, httponly=True, samesite="strict", max_age=86400 * 7)
+            return resp
+        return RedirectResponse("/login?error=1", status_code=303)
+
+    @app.get("/logout")
+    async def logout(request: Request):
+        sid = request.cookies.get("mrija_sid")
+        _SESSIONS.discard(sid)
+        resp = RedirectResponse("/login", status_code=303)
+        resp.delete_cookie("mrija_sid")
+        return resp
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
@@ -68,13 +108,12 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
             from fastapi import Response
             return Response(status_code=404)
         tpl = Template((STATIC_DIR / "admin.html").read_text(encoding="utf-8"))
-        droplet_url = os.environ.get("MRIJA_DROPLET_URL", "")
-        droplet_key = os.environ.get("MRIJA_DROPLET_KEY", "")
         return tpl.render(
             api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
             db_path=str(state.db_path) if state.db_path else "no database",
-            droplet_url=droplet_url,
-            has_droplet=bool(droplet_url and droplet_key),
+            droplet_url=os.environ.get("MRIJA_DROPLET_URL", ""),
+            has_droplet=bool(os.environ.get("MRIJA_DROPLET_URL") and os.environ.get("MRIJA_DROPLET_KEY")),
+            sync_configured=bool(os.environ.get("MRIJA_SYNC_REMOTE")),
         )
 
     return app

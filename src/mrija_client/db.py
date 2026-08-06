@@ -9,6 +9,37 @@ class MailDB:
         self._con = sqlite3.connect(str(path), check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA busy_timeout=3000")
+        self._init_schema()
+
+    def _init_schema(self) -> None:
+        self._con.executescript("""
+            CREATE TABLE IF NOT EXISTS archive_emails (
+                mailbox           TEXT    NOT NULL,
+                stable_id         TEXT    NOT NULL,
+                filepath          TEXT    NOT NULL,
+                folder            TEXT    NOT NULL,
+                date              TEXT    NOT NULL,
+                from_addr         TEXT    NOT NULL,
+                to_addrs          TEXT    NOT NULL DEFAULT '',
+                cc_addrs          TEXT    NOT NULL DEFAULT '',
+                subject           TEXT    NOT NULL,
+                body_text         TEXT    NOT NULL DEFAULT '',
+                total_size_bytes  INTEGER NOT NULL,
+                imported_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (mailbox, stable_id)
+            );
+            CREATE TABLE IF NOT EXISTS archive_attachments (
+                mailbox           TEXT    NOT NULL,
+                email_stable_id   TEXT    NOT NULL,
+                stored_path       TEXT    NOT NULL,
+                sha256            TEXT    NOT NULL,
+                size              INTEGER NOT NULL,
+                mime              TEXT    NOT NULL,
+                original_filename TEXT    NOT NULL,
+                imported_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (mailbox, email_stable_id, sha256, stored_path)
+            );
+        """)
 
     def stats(self) -> dict:
         row = self._con.execute(

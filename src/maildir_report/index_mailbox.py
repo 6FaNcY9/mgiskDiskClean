@@ -14,9 +14,9 @@ An optional *global* index can also be populated at a caller-specified path::
 
 Schema
 ------
-Two tables are created if they do not exist:
+Two client tables are created if they do not exist:
 
-``emails``
+``archive_emails``
     One row per unique email (keyed by ``stable_id``).
 
     Columns:
@@ -29,8 +29,7 @@ Two tables are created if they do not exist:
       subject           TEXT NOT NULL
       total_size_bytes  INTEGER NOT NULL
 
-``attachments``
-    ``attachments``
+``archive_attachments``
     One row per (email, stored_path) pair.  Multiple emails containing the
     same attachment payload each get their own row, pointing to the same
     ``stored_path`` on disk.  PK is (stored_path, email_stable_id).
@@ -92,12 +91,12 @@ from maildir_report.parser import scan_maildir
 
 # ── DDL ───────────────────────────────────────────────────────────────────────
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 _CREATE_EMAILS = """
-CREATE TABLE IF NOT EXISTS emails (
+CREATE TABLE IF NOT EXISTS archive_emails (
     mailbox           TEXT    NOT NULL,
-    stable_id         TEXT    NOT NULL PRIMARY KEY,
+    stable_id         TEXT    NOT NULL,
     filepath          TEXT    NOT NULL,
     folder            TEXT    NOT NULL,
     date              TEXT    NOT NULL,
@@ -106,30 +105,46 @@ CREATE TABLE IF NOT EXISTS emails (
     cc_addrs          TEXT    NOT NULL DEFAULT '',
     subject           TEXT    NOT NULL,
     body_text         TEXT    NOT NULL DEFAULT '',
-    total_size_bytes  INTEGER NOT NULL
+    total_size_bytes  INTEGER NOT NULL,
+    imported_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (mailbox, stable_id)
 );
 """
 
 _CREATE_ATTACHMENTS = """
-CREATE TABLE IF NOT EXISTS attachments (
+CREATE TABLE IF NOT EXISTS archive_attachments (
+    mailbox           TEXT    NOT NULL,
+    email_stable_id   TEXT    NOT NULL,
+    stored_path       TEXT    NOT NULL,
     sha256            TEXT    NOT NULL,
     size              INTEGER NOT NULL,
     mime              TEXT    NOT NULL,
     original_filename TEXT    NOT NULL,
-    stored_path       TEXT    NOT NULL,
-    email_stable_id   TEXT    NOT NULL,
-    PRIMARY KEY (stored_path, email_stable_id)
+    imported_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (mailbox, email_stable_id, sha256, stored_path)
 );
 """
 
 # Indexes for common search patterns.
 _CREATE_INDEXES = [
-    "CREATE INDEX IF NOT EXISTS idx_emails_mailbox ON emails (mailbox);",
-    "CREATE INDEX IF NOT EXISTS idx_emails_date ON emails (date);",
-    "CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments (sha256);",
-    "CREATE INDEX IF NOT EXISTS idx_attachments_email ON attachments (email_stable_id);",
-    "CREATE INDEX IF NOT EXISTS idx_attachments_orig_filename ON attachments (original_filename);",
+    "CREATE INDEX IF NOT EXISTS idx_archive_emails_mailbox ON archive_emails (mailbox);",
+    "CREATE INDEX IF NOT EXISTS idx_archive_emails_date ON archive_emails (date);",
+    "CREATE INDEX IF NOT EXISTS idx_archive_attachments_sha256 ON archive_attachments (sha256);",
+    "CREATE INDEX IF NOT EXISTS idx_archive_attachments_email ON archive_attachments (email_stable_id);",
+    "CREATE INDEX IF NOT EXISTS idx_archive_attachments_orig_filename ON archive_attachments (original_filename);",
 ]
+
+_CREATE_LEGACY_VIEWS = """
+DROP VIEW IF EXISTS emails;
+DROP VIEW IF EXISTS attachments;
+CREATE VIEW emails AS
+    SELECT mailbox, stable_id, filepath, folder, date, from_addr, to_addrs,
+           cc_addrs, subject, body_text, total_size_bytes
+    FROM archive_emails;
+CREATE VIEW attachments AS
+    SELECT sha256, size, mime, original_filename, stored_path, email_stable_id
+    FROM archive_attachments;
+"""
 
 
 # ── result dataclass ──────────────────────────────────────────────────────────
@@ -160,6 +175,132 @@ class IndexResult:
 # ── schema helpers ────────────────────────────────────────────────────────────
 
 
+def _object_type(conn: sqlite3.Connection, name: str) -> str | None:
+    row = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name=?", (name,)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _add_missing_archive_email_columns(conn: sqlite3.Connection) -> None:
+    existing_cols = _table_columns(conn, "archive_emails")
+    for col, default in [
+        ("to_addrs", "''"),
+        ("cc_addrs", "''"),
+        ("body_text", "''"),
+        ("imported_at", "''"),
+    ]:
+        if col not in existing_cols:
+            conn.execute(
+                f"ALTER TABLE archive_emails ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}"
+            )
+
+
+def _migrate_legacy_tables(conn: sqlite3.Connection) -> None:
+    if _object_type(conn, "emails") == "table":
+        cols = _table_columns(conn, "emails")
+        to_expr = "to_addrs" if "to_addrs" in cols else "''"
+        cc_expr = "cc_addrs" if "cc_addrs" in cols else "''"
+        body_expr = "body_text" if "body_text" in cols else "''"
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO archive_emails
+                (mailbox, stable_id, filepath, folder, date, from_addr,
+                 to_addrs, cc_addrs, subject, body_text, total_size_bytes)
+            SELECT mailbox, stable_id, filepath, folder, date, from_addr,
+                   {to_expr}, {cc_expr}, subject, {body_expr}, total_size_bytes
+            FROM emails
+            """
+        )
+        conn.execute("ALTER TABLE emails RENAME TO emails_legacy")
+
+    if _object_type(conn, "attachments") == "table":
+        rows = conn.execute("SELECT * FROM attachments").fetchall()
+        has_mailbox = "mailbox" in _table_columns(conn, "attachments")
+        for row in rows:
+            mailbox = row["mailbox"] if has_mailbox else None
+            if not mailbox:
+                found = conn.execute(
+                    "SELECT mailbox FROM archive_emails WHERE stable_id=? LIMIT 1",
+                    (row["email_stable_id"],),
+                ).fetchone()
+                mailbox = found[0] if found else ""
+            stored_path = pathlib.PurePosixPath(
+                "mailboxes", mailbox, "attachments", pathlib.Path(row["stored_path"]).name
+            ).as_posix()
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO archive_attachments
+                    (mailbox, email_stable_id, stored_path, sha256, size, mime,
+                     original_filename)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mailbox,
+                    row["email_stable_id"],
+                    stored_path,
+                    row["sha256"],
+                    row["size"],
+                    row["mime"],
+                    row["original_filename"],
+                ),
+        )
+        conn.execute("ALTER TABLE attachments RENAME TO attachments_legacy")
+
+    for legacy_name in ("emails_legacy", "attachments_legacy"):
+        if _object_type(conn, legacy_name) == "table":
+            conn.execute(f"DROP TABLE {legacy_name}")
+
+
+def _normalize_archive_attachment_paths(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT mailbox, email_stable_id, sha256, stored_path
+        FROM archive_attachments
+        WHERE stored_path LIKE '/%'
+        """
+    ).fetchall()
+    for row in rows:
+        rel_path = pathlib.PurePosixPath(
+            "mailboxes",
+            row["mailbox"],
+            "attachments",
+            pathlib.Path(row["stored_path"]).name,
+        ).as_posix()
+        try:
+            conn.execute(
+                """
+                UPDATE archive_attachments
+                SET stored_path=?
+                WHERE mailbox=? AND email_stable_id=? AND sha256=? AND stored_path=?
+                """,
+                (
+                    rel_path,
+                    row["mailbox"],
+                    row["email_stable_id"],
+                    row["sha256"],
+                    row["stored_path"],
+                ),
+            )
+        except sqlite3.IntegrityError:
+            conn.execute(
+                """
+                DELETE FROM archive_attachments
+                WHERE mailbox=? AND email_stable_id=? AND sha256=? AND stored_path=?
+                """,
+                (
+                    row["mailbox"],
+                    row["email_stable_id"],
+                    row["sha256"],
+                    row["stored_path"],
+                ),
+            )
+
+
 def _init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     """Open (or create) a SQLite database and ensure the schema exists.
 
@@ -186,24 +327,17 @@ def _init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     # Create tables (no-op if they already exist).
     conn.execute(_CREATE_EMAILS)
     conn.execute(_CREATE_ATTACHMENTS)
+    _add_missing_archive_email_columns(conn)
+    _migrate_legacy_tables(conn)
+    _normalize_archive_attachment_paths(conn)
     for idx_sql in _CREATE_INDEXES:
         conn.execute(idx_sql)
+    conn.executescript(_CREATE_LEGACY_VIEWS)
 
     # Schema migration: add new columns if missing.
     existing_version = conn.execute("PRAGMA user_version").fetchone()[0]
     if existing_version < _SCHEMA_VERSION:
-        existing_cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(emails)")
-        }
-        for col, default in [
-            ("to_addrs", "''"),
-            ("cc_addrs", "''"),
-            ("body_text", "''"),
-        ]:
-            if col not in existing_cols:
-                conn.execute(
-                    f"ALTER TABLE emails ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}"
-                )
+        _add_missing_archive_email_columns(conn)
         conn.execute(f"PRAGMA user_version={_SCHEMA_VERSION};")
 
     conn.commit()
@@ -218,7 +352,7 @@ def _upsert_email(
     """INSERT OR REPLACE one email row."""
     conn.execute(
         """
-        INSERT OR REPLACE INTO emails
+        INSERT OR REPLACE INTO archive_emails
             (mailbox, stable_id, filepath, folder, date, from_addr,
              to_addrs, cc_addrs, subject, body_text, total_size_bytes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -241,14 +375,14 @@ def _upsert_email(
 
 def _upsert_attachment(
     conn: sqlite3.Connection,
+    mailbox: str,
     part: dict[str, Any],
     email_stable_id: str,
-    attachment_dir: pathlib.Path,
 ) -> None:
     """INSERT OR REPLACE one attachment row.
 
-    The ``stored_path`` is the absolute path that ``extract_attachments``
-    would write (whether or not the file actually exists yet on disk).
+    The ``stored_path`` is relative to the archive data root, so the client can
+    resolve it on Linux, Windows, and the droplet.
     """
     sha256 = part.get("content_hash", "")
     size = part.get("size", 0)
@@ -262,21 +396,32 @@ def _upsert_attachment(
     mime = part.get("mime", "")
 
     stored_name = _stored_filename(sha256, size, original_filename)
-    stored_path = str(attachment_dir / stored_name)
+    stored_path = pathlib.PurePosixPath(
+        "mailboxes", mailbox, "attachments", stored_name
+    ).as_posix()
 
     conn.execute(
         """
-        INSERT OR REPLACE INTO attachments
-            (sha256, size, mime, original_filename, stored_path, email_stable_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        DELETE FROM archive_attachments
+        WHERE mailbox = ? AND email_stable_id = ? AND sha256 = ?
+        """,
+        (mailbox, email_stable_id, sha256),
+    )
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO archive_attachments
+            (mailbox, email_stable_id, stored_path, sha256, size, mime,
+             original_filename)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            mailbox,
+            email_stable_id,
+            stored_path,
             sha256,
             size,
             mime,
             original_filename,
-            stored_path,
-            email_stable_id,
         ),
     )
 
@@ -360,10 +505,10 @@ def index_mailbox(
                 if not _is_extractable_part(part):
                     continue
 
-                _upsert_attachment(conn, part, email_rec["stable_id"], attachment_dir)
+                _upsert_attachment(conn, mailbox, part, email_rec["stable_id"])
                 if global_conn:
                     _upsert_attachment(
-                        global_conn, part, email_rec["stable_id"], attachment_dir
+                        global_conn, mailbox, part, email_rec["stable_id"]
                     )
                 attachments_indexed += 1
 

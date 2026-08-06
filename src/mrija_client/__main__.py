@@ -37,9 +37,7 @@ def main() -> None:
     state.log("[bold #818cf8]MrijaArchive[/bold #818cf8] starting…")
 
     if args.db:
-        if not args.db.exists():
-            print(f"ERROR: database not found: {args.db}", file=sys.stderr)
-            sys.exit(1)
+        args.db.parent.mkdir(parents=True, exist_ok=True)
         from mrija_client.db import MailDB
         state.db = MailDB(args.db)
         state.db_path = args.db

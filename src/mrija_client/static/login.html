@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MrijaArchive</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0f1a;
+      color: #e2e8f0;
+      font-family: ui-monospace, 'Cascadia Code', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-top: 3px solid #6366f1;
+      border-radius: 8px;
+      padding: 2rem 2.5rem;
+      width: 100%;
+      max-width: 340px;
+    }
+    h1 { font-size: .95rem; color: #818cf8; margin-bottom: 1.5rem; text-align: center; letter-spacing: .04em; }
+    label { display: block; font-size: 11px; color: #64748b; margin-bottom: .35rem; }
+    input[type=password] {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 5px;
+      color: #e2e8f0;
+      font-family: inherit;
+      font-size: 13px;
+      padding: .5rem .75rem;
+    }
+    input[type=password]:focus { outline: none; border-color: #6366f1; }
+    button {
+      width: 100%;
+      background: #6366f1;
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: .6rem;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+    button:hover { background: #818cf8; }
+    .error { color: #fca5a5; font-size: 11px; margin-bottom: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>&#x1F4E6; MrijaArchive</h1>
+    {% if error %}<p class="error">Invalid password.</p>{% endif %}
+    <form method="post" action="/login">
+      <label for="pw">Password</label>
+      <input type="password" id="pw" name="password" autofocus autocomplete="current-password">
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
+</body>
+</html>
