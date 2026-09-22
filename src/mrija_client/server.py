@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Template
 from mrija_client.state import AppState
+from mrija_client.credentials import CredentialError, read_credential
 
 _HERE = Path(__file__).parent
 STATIC_DIR = _HERE / "static"
@@ -77,7 +78,10 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
     async def login_post(request: Request):
         form = await request.form()
         password = str(form.get("password", ""))
-        expected = os.environ.get("MRIJA_PASSWORD", "")
+        try:
+            expected = read_credential("MRIJA_PASSWORD")
+        except CredentialError:
+            expected = ""
         if expected and _secrets.compare_digest(password.encode(), expected.encode()):
             sid = _secrets.token_hex(32)
             _SESSIONS.add(sid)
@@ -98,7 +102,7 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
     async def index():
         tpl = Template((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
         return tpl.render(
-            api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
+            api_key=_api_key_for_template(),
             mode=mode,
         )
 
@@ -109,7 +113,7 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
             return Response(status_code=404)
         tpl = Template((STATIC_DIR / "admin.html").read_text(encoding="utf-8"))
         return tpl.render(
-            api_key=os.environ.get("MRIJA_API_KEY", "dev-key"),
+            api_key=_api_key_for_template(),
             db_path=str(state.db_path) if state.db_path else "no database",
             droplet_url=os.environ.get("MRIJA_DROPLET_URL", ""),
             has_droplet=bool(os.environ.get("MRIJA_DROPLET_URL") and os.environ.get("MRIJA_DROPLET_KEY")),
@@ -117,3 +121,10 @@ def create_app(state: AppState, mode: str = "user") -> FastAPI:
         )
 
     return app
+
+
+def _api_key_for_template() -> str:
+    try:
+        return read_credential("MRIJA_API_KEY")
+    except CredentialError:
+        return ""

@@ -1,12 +1,13 @@
 from __future__ import annotations
 import argparse
-import os
 import sys
 import threading
 import time
 import urllib.request
 import webbrowser
 from pathlib import Path
+
+from mrija_client.credentials import CredentialError, read_credential
 
 
 def _wait_for_server(url: str, timeout: float = 10.0) -> bool:
@@ -52,15 +53,18 @@ def main() -> None:
         except Exception:
             pass
 
+    if args.mode == "admin":
+        try:
+            if not read_credential("MRIJA_API_KEY"):
+                raise CredentialError("missing MRIJA_API_KEY")
+            if not read_credential("MRIJA_PASSWORD"):
+                raise CredentialError("missing MRIJA_PASSWORD")
+        except CredentialError as exc:
+            print(f"ERROR: invalid admin credentials: {exc}", file=sys.stderr)
+            sys.exit(2)
+
     app = create_app(state, mode=args.mode)
     server_url = f"http://{args.bind}:{args.port}"
-
-    if not os.environ.get("MRIJA_API_KEY"):
-        import secrets
-        key = secrets.token_hex(16)
-        os.environ["MRIJA_API_KEY"] = key
-        print(f"API key (set MRIJA_API_KEY to reuse): {key}")
-        state.log(f"API key: [dim]{key[:8]}…[/dim]")
 
     import uvicorn
     config = uvicorn.Config(app, host=args.bind, port=args.port, log_level="warning")

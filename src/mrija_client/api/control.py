@@ -10,12 +10,16 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from mrija_client.state import ClientState
+from mrija_client.credentials import CredentialError, read_credential
 router = APIRouter()
 _rate_lock = threading.Lock()
 _last_call: dict[str, float] = {}
 _RATE_LIMIT_SEC = 10  # destructive endpoints: one call per 10 s
 async def _check_key(x_api_key: str = Header(default="")) -> None:
-    expected = os.environ.get("MRIJA_API_KEY", "dev-key")
+    try:
+        expected = read_credential("MRIJA_API_KEY")
+    except CredentialError:
+        expected = ""
     if x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
 def _rate_limit(endpoint: str) -> None:
